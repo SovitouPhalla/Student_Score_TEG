@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+{% block title %}Parent Login – Student Term Report Portal{% endblock %}
+
+{% block content %}
+<div class="card card-narrow">
+
+  <div class="card-header">
+    <h1>Parent / Guardian Login</h1>
+    <p class="card-subtitle">Enter your child&rsquo;s Student ID and the password provided by the school.</p>
+  </div>
+
+  <form method="POST" action="{{ url_for('login') }}" novalidate>
+
+    <div class="form-group">
+      <label for="student_id">Student ID</label>
+      <input
+        type="text"
+        id="student_id"
+        name="student_id"
+        placeholder="e.g. S001"
+        required
+        autofocus
+      />
+    </div>
+
+    <div class="form-group">
+      <label for="password">Parent Password</label>
+      <input
+        type="password"
+        id="password"
+        name="password"
+        placeholder="Enter password"
+        required
+      />
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-full">View Report Card</button>
+
+  </form>
+
+</div>
+{% endblock %}
