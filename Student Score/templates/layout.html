@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Student Term Report Portal{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+
+  <!-- ── Navigation bar ─────────────────────────────────────────────────── -->
+  <header class="navbar">
+    <div class="navbar-brand">
+      <img src="{{ url_for('static', filename='teg-logo.png') }}"
+           alt="Tribal Education Group"
+           class="navbar-logo" />
+      <span class="navbar-title">Student Term Report Portal</span>
+    </div>
+    <nav class="navbar-links">
+      <a href="{{ url_for('login') }}">Parent Login</a>
+      <a href="{{ url_for('update') }}">Teacher Portal</a>
+      <a href="{{ url_for('admin_login') }}">Admin</a>
+      {% if session.get('is_hod') and session.get('teacher_user') %}
+        <a href="{{ url_for('hod_review') }}">HOD Approvals</a>
+        <span class="navbar-user">👤 {{ session['teacher_user'] }} (HOD)</span>
+        <a href="{{ url_for('teacher_logout') }}" class="btn-logout">Teacher Logout</a>
+      {% elif session.get('teacher_user') %}
+        <span class="navbar-user">👤 {{ session['teacher_user'] }}</span>
+        <a href="{{ url_for('teacher_logout') }}" class="btn-logout">Teacher Logout</a>
+      {% endif %}
+      {% if session.get('role') == 'admin' %}
+        <span class="navbar-user">🛡 {{ session['admin_user'] }}</span>
+        <a href="{{ url_for('admin_logout') }}" class="btn-logout">Admin Logout</a>
+      {% endif %}
+      {% if session.get('student_id') %}
+        <a href="{{ url_for('logout') }}" class="btn-logout">Logout</a>
+      {% endif %}
+    </nav>
+  </header>
+
+  <!-- ── Flash messages ─────────────────────────────────────────────────── -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-container">
+        {% for category, message in messages %}
+          <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <!-- ── Page content ───────────────────────────────────────────────────── -->
+  <main class="main-content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2025 Student Term Report Portal &mdash; All rights reserved.</p>
+  </footer>
+
+</body>
+</html>
