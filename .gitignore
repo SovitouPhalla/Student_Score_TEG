@@ -1,0 +1,12 @@
+# Ignore Excel databases to prevent overwriting live teacher data
+*.xlsx
+*.xlsb
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+
+# Ignore environment variables or local settings
+.env
+venv/
+teg-env/
