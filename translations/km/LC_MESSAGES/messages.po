@@ -1,0 +1,279 @@
+# Khmer (Cambodia) translations for Student Term Report Portal
+# Copyright (C) 2025 Tribal Education Group
+# This file is distributed under the same license as the project.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Student Term Report Portal 1.0\n"
+"Report-Msgid-Bugs-To: admin@teg.edu.kh\n"
+"POT-Creation-Date: 2025-05-05 00:00+0700\n"
+"PO-Revision-Date: 2025-05-05 00:00+0700\n"
+"Last-Translator: Tribal Education Group\n"
+"Language-Team: Khmer\n"
+"Language: km\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+# ── Page titles ───────────────────────────────────────────────────────────────
+msgid "Student Term Report Portal"
+msgstr "វិបផតថលតារាងពិន្ទុសិស្ស"
+
+msgid "Welcome to the Student Report Portal"
+msgstr "សូមស្វាគមន៍មកកាន់គេហទំព័រលទ្ធផលសិក្សារបស់សិស្ស"
+
+msgid "Select your department below to view a term report card."
+msgstr "សូមជ្រើសរើសផ្នែកសិក្សារបស់អ្នកនៅខាងក្រោម ដើម្បីមើលព្រឹត្តិបត្រពិន្ទុ។"
+
+msgid "English Department"
+msgstr "ផ្នែកភាសាអង់គ្លេស"
+
+msgid "Chinese Department"
+msgstr "ផ្នែកភាសាចិន"
+
+msgid "Parent / Guardian Login"
+msgstr "ចូលប្រើប្រាស់ (មាតាបិតា / អាណាព្យាបាល)"
+
+# ── Login form ────────────────────────────────────────────────────────────────
+msgid "Enter your child's full name and the password provided by the school."
+msgstr "សូមបញ្ចូលឈ្មោះពេញរបស់កូន និងពាក្យសម្ងាត់ដែលផ្ដល់ដោយសាលា។"
+
+msgid "Student Full Name"
+msgstr "ឈ្មោះពេញរបស់សិស្ស"
+
+msgid "Child's Class (to clarify)"
+msgstr "ថ្នាក់កូន (ដើម្បីបញ្ជាក់)"
+
+msgid "Select Class"
+msgstr "ជ្រើសរើសថ្នាក់"
+
+msgid "— Select Class —"
+msgstr "— ជ្រើសរើសថ្នាក់ —"
+
+msgid "Multiple students share this name. Please select your child's class to continue."
+msgstr "មានសិស្សច្រើននាក់ប្រើឈ្មោះនេះ។ សូមជ្រើសរើសថ្នាក់កូនដើម្បីបន្ត។"
+
+msgid "Parent Password"
+msgstr "ពាក្យសម្ងាត់ (មាតាបិតា)"
+
+msgid "Enter password"
+msgstr "បញ្ចូលពាក្យសម្ងាត់"
+
+msgid "View Report Card"
+msgstr "មើលតារាងរបាយការណ៍"
+
+# ── Navbar ────────────────────────────────────────────────────────────────────
+msgid "Departments"
+msgstr "នាយកដ្ឋាន"
+
+msgid "English Login"
+msgstr "ចូលប្រើ (អង់គ្លេស)"
+
+msgid "Chinese Login"
+msgstr "ចូលប្រើ (ចិន)"
+
+msgid "Teacher Portal"
+msgstr "វិបផតថលគ្រូ"
+
+msgid "Admin"
+msgstr "អ្នកគ្រប់គ្រង"
+
+msgid "HOD Approvals"
+msgstr "ការអនុម័ត HOD"
+
+msgid "Teacher Logout"
+msgstr "ចាកចេញ (គ្រូ)"
+
+msgid "Admin Logout"
+msgstr "ចាកចេញ (អ្នកគ្រប់គ្រង)"
+
+msgid "Logout"
+msgstr "ចាកចេញ"
+
+# ── Report card — student info ────────────────────────────────────────────────
+msgid "Student Name"
+msgstr "ឈ្មោះសិស្ស"
+
+msgid "Student ID"
+msgstr "លេខសម្គាល់សិស្ស"
+
+msgid "Class"
+msgstr "ថ្នាក់"
+
+msgid "Report Generated"
+msgstr "កាលបរិច្ឆេទរបាយការណ៍"
+
+msgid "Terms Released"
+msgstr "រយៈពេលដែលបានចេញផ្សាយ"
+
+msgid "Department"
+msgstr "នាយកដ្ឋាន"
+
+msgid "No. in List"
+msgstr "លំដាប់"
+
+# ── Report card — score table ─────────────────────────────────────────────────
+msgid "All-Term Score Breakdown"
+msgstr "ការបែងចែកពិន្ទុគ្រប់ត្រីមាស"
+
+msgid "Master Overview (All Terms)"
+msgstr "ទិដ្ឋភាពទូទៅ (គ្រប់ត្រីមាស)"
+
+msgid "View Term"
+msgstr "មើលត្រីមាស"
+
+msgid "Category"
+msgstr "ប្រភេទ"
+
+msgid "Weight"
+msgstr "ទម្ងន់"
+
+msgid "Score / 100"
+msgstr "ពិន្ទុ / ១០០"
+
+msgid "Grade"
+msgstr "ថ្នាក់"
+
+msgid "Contribution"
+msgstr "ការចូលរួម"
+
+msgid "Final Report"
+msgstr "របាយការណ៍ចុងក្រោយ"
+
+msgid "Final Report Score"
+msgstr "ពិន្ទុរបាយការណ៍ចុងក្រោយ"
+
+msgid "Status"
+msgstr "ស្ថានភាព"
+
+msgid "Not Yet Released"
+msgstr "មិនទាន់ចេញផ្សាយ"
+
+msgid "PASSED"
+msgstr "បានជាប់"
+
+msgid "FAILED"
+msgstr "បានធ្លាក់"
+
+msgid "Passed"
+msgstr "ជាប់"
+
+msgid "Failed"
+msgstr "ធ្លាក់"
+
+msgid "Incomplete"
+msgstr "មិនពេញ"
+
+msgid "Term %(t)s Report"
+msgstr "របាយការណ៍ត្រីមាស %(t)s"
+
+msgid "Released"
+msgstr "ចេញផ្សាយ"
+
+msgid "Pending"
+msgstr "កំពុងរង់ចាំ"
+
+# ── Report card — YTD ────────────────────────────────────────────────────────
+msgid "Year-to-Date Average"
+msgstr "មធ្យមភាគប្រចាំឆ្នាំ"
+
+msgid "Cumulative Average"
+msgstr "មធ្យមភាគរួម"
+
+msgid "OVERALL PASSING"
+msgstr "ជាប់ជារួម"
+
+msgid "OVERALL FAILING"
+msgstr "ធ្លាក់ជារួម"
+
+msgid "Passing threshold: %(pct)s%%"
+msgstr "ដំបូលឆ្លងកាត់: %(pct)s%%"
+
+msgid "No term data has been released yet. Check back after your first term results."
+msgstr "មិនទាន់មានទិន្នន័យត្រីមាស។ សូមត្រឡប់មកវិញបន្ទាប់ពីលទ្ធផលត្រីមាសទីមួយ។"
+
+# ── Report card — score categories ───────────────────────────────────────────
+msgid "Conduct"
+msgstr "ការប្រព្រឹត្ត"
+
+msgid "Class Participation"
+msgstr "ការចូលរួមថ្នាក់"
+
+msgid "Homework & Assignments"
+msgstr "កិច្ចការផ្ទះ"
+
+msgid "Quiz"
+msgstr "ប្រឡងខ្លី"
+
+msgid "Mid-Term Exam"
+msgstr "ប្រឡងពាក់កណ្ដាលឆ្នាំ"
+
+msgid "Final Exam"
+msgstr "ប្រឡងចុងឆ្នាំ"
+
+msgid "Behavior"
+msgstr "ឥរិយាបថ"
+
+msgid "Homework"
+msgstr "កិច្ចការផ្ទះ"
+
+msgid "Quizzes"
+msgstr "ប្រឡងខ្លី"
+
+msgid "Final Test"
+msgstr "ការធ្វើតេស្តចុងក្រោយ"
+
+# ── Report card — grading scale ───────────────────────────────────────────────
+msgid "Grading Scale"
+msgstr "មាត្រដ្ឋានពិន្ទុ"
+
+msgid "Excellent"
+msgstr "ល្អប្រសើរ"
+
+msgid "Very Good"
+msgstr "ល្អណាស់"
+
+msgid "Good"
+msgstr "ល្អ"
+
+msgid "Average"
+msgstr "មធ្យម"
+
+msgid "Failure"
+msgstr "បរាជ័យ"
+
+# ── Report card — signature area ──────────────────────────────────────────────
+msgid "Class Teacher"
+msgstr "គ្រូថ្នាក់"
+
+msgid "Principal"
+msgstr "នាយក"
+
+msgid "Parent / Guardian"
+msgstr "មាតាបិតា / អាណាព្យាបាល"
+
+msgid "Print Report"
+msgstr "បោះពុម្ពរបាយការណ៍"
+
+msgid "Accredited by"
+msgstr "ទទួលស្គាល់ដោយ"
+
+# ── Report card — school header ───────────────────────────────────────────────
+msgid "Official Term Report Card"
+msgstr "តារាងរបាយការណ៍ការសិក្សាផ្លូវការ"
+
+msgid "Academic Year 2024 – 2025"
+msgstr "ឆ្នាំសិក្សា ២០២៤ – ២០២៥"
+
+msgid "Chinese Department — Official Term Report Card"
+msgstr "នាយកដ្ឋានចិន — តារាងរបាយការណ៍ផ្លូវការ"
+
+msgid "CN Program • Academic Year 2024 – 2025"
+msgstr "កម្មវិធី CN • ឆ្នាំសិក្សា ២០២៤ – ២០២៥"
+
+msgid "Chinese (CN Program)"
+msgstr "ចិន (កម្មវិធី CN)"
+
+# ── Footer ────────────────────────────────────────────────────────────────────
+msgid "All rights reserved."
+msgstr "រក្សាសិទ្ធិគ្រប់យ៉ាង។"

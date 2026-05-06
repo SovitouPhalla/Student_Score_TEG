@@ -1,0 +1,207 @@
+{% extends "layout.html" %}
+
+{% block title %}Admin Dashboard — Student Term Report Portal{% endblock %}
+
+{% block content %}
+<div class="admin-page">
+
+  <!-- ── Page header ─────────────────────────────────────────────────── -->
+  <div class="admin-header">
+    <div>
+      <h1 class="admin-title">🛡 Student Affairs Dashboard</h1>
+      <p class="admin-subtitle">Manage student records &mdash; logged in as
+        <strong>{{ session['admin_user'] }}</strong></p>
+    </div>
+    <div class="admin-stats">
+      <div class="stat-chip">
+        <span class="stat-num">{{ total }}</span>
+        <span class="stat-lbl">Total Students</span>
+      </div>
+      {% if filter_class or q %}
+      <div class="stat-chip stat-chip-filtered">
+        <span class="stat-num">{{ filtered }}</span>
+        <span class="stat-lbl">Showing</span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ── Edit student form (shown only when ?edit=N is in the URL) ───── -->
+  {% if edit_student %}
+  <div class="admin-card admin-edit-card">
+    <div class="card-header">
+      <h2>Edit Student</h2>
+      <a href="{{ url_for('admin_dashboard', filter_class=filter_class, q=q) }}"
+         class="btn btn-outline btn-sm">Cancel</a>
+    </div>
+    <form method="POST" action="{{ url_for('admin_student_edit') }}">
+      <input type="hidden" name="row_idx" value="{{ edit_student['_row_idx'] }}" />
+      <div class="admin-form-grid">
+        <div class="form-group">
+          <label>Student ID (optional)</label>
+          <input type="text" name="student_id"
+                 value="{{ edit_student['StudentID'] }}"
+                 placeholder="Leave blank if none" />
+        </div>
+        <div class="form-group">
+          <label>Full Name <span class="req">*</span></label>
+          <input type="text" name="name"
+                 value="{{ edit_student['Name'] }}"
+                 required />
+        </div>
+        <div class="form-group">
+          <label>Class <span class="req">*</span></label>
+          <select name="class_label" required>
+            {% for cl in class_labels %}
+              <option value="{{ cl }}"
+                {% if cl == edit_student['ClassLabel'] %}selected{% endif %}>
+                {{ cl }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Parent Password <span class="req">*</span></label>
+          <input type="text" name="password"
+                 value="{{ edit_student['ParentPassword'] }}"
+                 required />
+        </div>
+      </div>
+      <div class="btn-row">
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+
+  <!-- ── Filter + Search bar ────────────────────────────────────────── -->
+  <div class="admin-card">
+    <form method="GET" action="{{ url_for('admin_dashboard') }}"
+          class="admin-filter-row">
+      <div class="form-group admin-filter-class">
+        <label>Filter by Class</label>
+        <select name="filter_class">
+          <option value="">All Classes</option>
+          {% for cl in class_labels %}
+            <option value="{{ cl }}"
+              {% if cl == filter_class %}selected{% endif %}>{{ cl }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group admin-filter-search">
+        <label>Search Name / ID</label>
+        <input type="text" name="q" value="{{ q }}"
+               placeholder="Type to filter..." />
+      </div>
+      <div class="admin-filter-btn">
+        <button type="submit" class="btn btn-primary">Apply</button>
+        {% if filter_class or q %}
+        <a href="{{ url_for('admin_dashboard') }}"
+           class="btn btn-outline">Clear</a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+
+  <!-- ── Roster table ────────────────────────────────────────────────── -->
+  <div class="admin-card admin-table-card">
+    {% if students %}
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Student ID</th>
+            <th>Name</th>
+            <th>Class</th>
+            <th>Password</th>
+            <th class="action-col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in students %}
+          <tr {% if edit_student and edit_student['_row_idx'] == s['_row_idx'] %}
+              class="row-editing"{% endif %}>
+            <td class="admin-row-num">{{ loop.index }}</td>
+            <td class="admin-id-cell">
+              {% if s['StudentID'] %}
+                <code>{{ s['StudentID'] }}</code>
+              {% else %}
+                <span class="no-id">—</span>
+              {% endif %}
+            </td>
+            <td class="admin-name-cell">{{ s['Name'] }}</td>
+            <td><span class="class-tag">{{ s['ClassLabel'] }}</span></td>
+            <td class="admin-pass-cell">
+              <code>{{ s['ParentPassword'] }}</code>
+            </td>
+            <td class="action-col">
+              <a href="{{ url_for('admin_dashboard',
+                             filter_class=filter_class, q=q,
+                             edit=s['_row_idx']) }}"
+                 class="btn btn-outline btn-xs">Edit</a>
+              <form method="POST"
+                    action="{{ url_for('admin_student_delete') }}"
+                    style="display:inline"
+                    onsubmit="return confirm('Delete this student? This also removes all their grade records.')">
+                <input type="hidden" name="row_idx"
+                       value="{{ s['_row_idx'] }}" />
+                <button type="submit"
+                        class="btn btn-danger btn-xs">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="admin-empty">
+      <p>No students match the current filter.</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- ── Add Student form ────────────────────────────────────────────── -->
+  <div class="admin-card">
+    <div class="card-header">
+      <h2>Add New Student</h2>
+    </div>
+    <form method="POST" action="{{ url_for('admin_student_add') }}">
+      <!-- preserve current filter so redirect lands back in same view -->
+      <input type="hidden" name="filter_class" value="{{ filter_class }}" />
+      <input type="hidden" name="q"            value="{{ q }}" />
+      <div class="admin-form-grid">
+        <div class="form-group">
+          <label>Student ID (optional)</label>
+          <input type="text" name="student_id" placeholder="e.g. D01965" />
+        </div>
+        <div class="form-group">
+          <label>Full Name <span class="req">*</span></label>
+          <input type="text" name="name" placeholder="e.g. Sokha Chan" required />
+        </div>
+        <div class="form-group">
+          <label>Class <span class="req">*</span></label>
+          <select name="class_label" required>
+            <option value="">— Select class —</option>
+            {% for cl in class_labels %}
+              <option value="{{ cl }}"
+                {% if cl == filter_class %}selected{% endif %}>{{ cl }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Parent Password <span class="req">*</span></label>
+          <input type="text" name="password"
+                 placeholder="e.g. D01965 or sokchane"
+                 required />
+        </div>
+      </div>
+      <div class="btn-row">
+        <button type="submit" class="btn btn-primary">Add Student</button>
+      </div>
+    </form>
+  </div>
+
+</div>
+{% endblock %}

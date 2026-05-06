@@ -1,0 +1,72 @@
+{% extends "layout.html" %}
+{% block title %}{{ _('Parent / Guardian Login') }} – {{ _('Student Term Report Portal') }}{% endblock %}
+
+{% block content %}
+<div class="card card-narrow">
+
+  <!-- ── Language toggle ──────────────────────────────────────────── -->
+  <div class="lang-toggle">
+    <a href="{{ url_for('set_language', lang='en') }}"
+       class="lang-btn {{ 'lang-btn-active' if session.get('language', 'en') == 'en' }}">
+      🇺🇸 EN
+    </a>
+    <a href="{{ url_for('set_language', lang='km') }}"
+       class="lang-btn {{ 'lang-btn-active' if session.get('language') == 'km' }}">
+      🇰🇭 ខ្មែរ
+    </a>
+  </div>
+
+  <div class="card-header">
+    <h1>{{ _('Parent / Guardian Login') }}</h1>
+    <p class="card-subtitle">{{ _("Enter your child's full name and the password provided by the school.") }}</p>
+  </div>
+
+  <form method="POST" action="{{ url_for('login') }}" novalidate>
+
+    <div class="form-group">
+      <label for="student_name">{{ _('Student Full Name') }}</label>
+      <input
+        type="text"
+        id="student_name"
+        name="student_name"
+        placeholder="e.g. Chhuor Chunminh"
+        value="{{ prefill_name or '' }}"
+        required
+        autofocus
+      />
+    </div>
+
+    {% if show_class_selector %}
+    <!-- Show class selector if multiple students with same name exist -->
+    <div class="form-group">
+      <label for="class_label">{{ _("Child's Class (to clarify)") }}</label>
+      <select id="class_label" name="class_label" required>
+        <option value="">{{ _('— Select Class —') }}</option>
+        {% for cls in matching_classes %}
+        <option value="{{ cls }}" {{ 'selected' if prefill_class == cls }}>{{ cls }}</option>
+        {% endfor %}
+      </select>
+      <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">
+        {{ _('Multiple students share this name. Please select your child\'s class to continue.') }}
+      </p>
+    </div>
+    {% endif %}
+
+    <div class="form-group">
+      <label for="password">{{ _('Parent Password') }}</label>
+      <input
+        type="password"
+        id="password"
+        name="password"
+        placeholder="{{ _('Enter password') }}"
+        required
+      />
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-full">{{ _('View Report Card') }}</button>
+
+  </form>
+
+</div>
+{% endblock %}
+

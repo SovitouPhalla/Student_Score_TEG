@@ -1,0 +1,65 @@
+{% extends "layout.html" %}
+{% block title %}Parent Login – Chinese Department{% endblock %}
+
+{% block content %}
+<div class="card card-narrow">
+
+  <div class="card-header">
+    <h1>Chinese Department Login</h1>
+    <p class="card-subtitle">
+      Enter your child&rsquo;s full name and the password provided by the school.
+    </p>
+  </div>
+
+  <form method="POST" action="{{ url_for('cn_login') }}" novalidate>
+
+    <div class="form-group">
+      <label for="student_name">Student Full Name</label>
+      <input
+        type="text"
+        id="student_name"
+        name="student_name"
+        placeholder="e.g. Chan Dara"
+        value="{{ prefill_name or '' }}"
+        required
+        autofocus
+      />
+    </div>
+
+    {% if show_class_selector %}
+    <div class="form-group">
+      <label for="class_label">Child&rsquo;s Class (to clarify)</label>
+      <select id="class_label" name="class_label" required>
+        <option value="">— Select Class —</option>
+        {% for cls in matching_classes %}
+        <option value="{{ cls }}" {{ 'selected' if prefill_class == cls }}>{{ cls }}</option>
+        {% endfor %}
+      </select>
+      <p style="font-size:0.9rem;color:#666;margin-top:.5rem;">
+        Multiple students share this name. Please select your child&rsquo;s class.
+      </p>
+    </div>
+    {% endif %}
+
+    <div class="form-group">
+      <label for="password">Parent Password</label>
+      <input
+        type="password"
+        id="password"
+        name="password"
+        placeholder="Enter password"
+        required
+      />
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-full">View Report Card</button>
+
+  </form>
+
+  <p style="margin-top:1.25rem;text-align:center;font-size:.9rem;color:#666;">
+    Wrong department?
+    <a href="{{ url_for('index') }}">← Back to department selection</a>
+  </p>
+
+</div>
+{% endblock %}

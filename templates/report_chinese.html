@@ -1,0 +1,549 @@
+﻿{% extends "layout.html" %}
+{% block title %}Report Card â€“ {{ student.Name }} (Chinese Dept){% endblock %}
+
+{% block content %}
+
+{# â”€â”€ Grade lookup helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
+{% macro letter_grade(score) %}
+  {%- if score >= 90 %}A
+  {%- elif score >= 80 %}B
+  {%- elif score >= 70 %}C
+  {%- elif score >= 60 %}D
+  {%- else %}E{% endif -%}
+{% endmacro %}
+
+{% macro grade_label(score) %}
+  {%- if score >= 90 %}Excellent
+  {%- elif score >= 80 %}Very Good
+  {%- elif score >= 70 %}Good
+  {%- elif score >= 60 %}Average
+  {%- else %}Failure{% endif -%}
+{% endmacro %}
+
+{% macro gp_range(score) %}
+  {%- if score >= 90 %}3.60 â€“ 4.00
+  {%- elif score >= 80 %}3.00 â€“ 3.59
+  {%- elif score >= 70 %}2.00 â€“ 2.99
+  {%- elif score >= 60 %}1.00 â€“ 1.99
+  {%- else %}0.00 â€“ 0.99{% endif -%}
+{% endmacro %}
+
+{% set col_friendly = {
+  'Behavior':  _('Behavior'),
+  'CP':        _('Class Participation'),
+  'Homework':  _('Homework'),
+  'Quiz':      _('Quizzes'),
+  'FinalTest': _('Final Test')
+} %}
+{% set weight_pct = {
+  'Behavior':  '10%',
+  'CP':        '10%',
+  'Homework':  '20%',
+  'Quiz':      '20%',
+  'FinalTest': '40%'
+} %}
+
+<div class="report-card">
+
+  <!-- â”€â”€ School header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <div class="report-header">
+    <img src="{{ url_for('static', filename='teg-logo.png') }}"
+         alt="Tribal Education Group"
+         class="report-header-logo" />
+    <div class="report-school-info">
+      <h1 class="report-school-name">Tribal Education Group</h1>
+      <p class="report-school-sub">{{ _('Chinese Department â€” Official Term Report Card') }}</p>
+      <p class="report-school-sub">{{ _('CN Program â€¢ Academic Year 2024 â€“ 2025') }}</p>
+    </div>
+  </div>
+
+  <hr class="report-divider" />
+
+  <!-- â”€â”€ Student info â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <div class="report-meta">
+    <div class="report-meta-item">
+      <span class="meta-label">{{ _('Student Name') }}</span>
+      <span class="meta-value">{{ student.Name }}</span>
+    </div>
+    <div class="report-meta-item">
+      <span class="meta-label">{{ _('No. in List') }}</span>
+      <span class="meta-value">{{ student.No if student.No else 'â€”' }}</span>
+    </div>
+    <div class="report-meta-item">
+      <span class="meta-label">{{ _('Class') }}</span>
+      <span class="meta-value">{{ student.Class if student.Class else 'â€”' }}</span>
+    </div>
+    <div class="report-meta-item">
+      <span class="meta-label">{{ _('Department') }}</span>
+      <span class="meta-value">{{ _('Chinese (CN Program)') }}</span>
+    </div>
+    <div class="report-meta-item">
+      <span class="meta-label">{{ _('Report Generated') }}</span>
+      <span class="meta-value" id="cn-report-date"></span>
+      <script>
+        document.getElementById('cn-report-date').textContent =
+          new Date().toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'});
+      </script>
+    </div>
+    <div class="report-meta-item">
+      <span class="meta-label">{{ _('Terms Released') }}</span>
+      <span class="meta-value">
+        {{ all_terms.values() | select | list | length }} / 4
+      </span>
+    </div>
+  </div>
+
+  <hr class="report-divider" />
+
+  <!-- â”€â”€ Chinese grading scale reference â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <div class="cn-grade-scale">
+    <h3 class="cn-scale-title">{{ _('Grading Scale') }}</h3>
+    <table class="cn-scale-table">
+      <thead>
+        <tr>
+          <th>Score Range</th>
+          <th>{{ _('Grade') }}</th>
+          <th>Description</th>
+          <th>Grade Point</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>90 â€“ 100</td><td><span class="grade-badge grade-A">A</span></td><td>{{ _('Excellent') }}</td><td>3.60 â€“ 4.00</td></tr>
+        <tr><td>80 â€“ 89</td><td><span class="grade-badge grade-B">B</span></td><td>{{ _('Very Good') }}</td><td>3.00 â€“ 3.59</td></tr>
+        <tr><td>70 â€“ 79</td><td><span class="grade-badge grade-C">C</span></td><td>{{ _('Good') }}</td><td>2.00 â€“ 2.99</td></tr>
+        <tr><td>60 â€“ 69</td><td><span class="grade-badge grade-D">D</span></td><td>{{ _('Average') }}</td><td>1.00 â€“ 1.99</td></tr>
+        <tr><td>Below 60</td><td><span class="grade-badge grade-F">E/F</span></td><td>{{ _('Failure') }}</td><td>0.00 â€“ 0.99</td></tr>
+      </tbody>
+    </table>
+    <p class="cn-scale-note">
+      Special statuses: <strong>WF</strong> = Withdrawal without Failure &nbsp;|&nbsp;
+      <strong>AU</strong> = Audit (no grade assigned)
+    </p>
+  </div>
+
+  <hr class="report-divider" />
+
+  <!-- â”€â”€ Term View Selector â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <div class="term-view-selector">
+    <label class="term-view-label" for="cn-term-selector">{{ _('View Term') }}</label>
+    <select id="cn-term-selector" class="term-view-select"
+            onchange="cnSwitchView(this.value)">
+      <option value="master">{{ _('Master Overview (All Terms)') }}</option>
+      {% for t in valid_terms %}
+      <option value="{{ t }}">
+        Term {{ t }}{% if all_terms[t] %} â€” Released âœ”{% else %} â€” Pending{% endif %}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+       MASTER OVERVIEW
+       â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+  <div id="cn-view-master">
+    <h2 class="section-title">{{ _('All-Term Score Breakdown') }}</h2>
+
+    <div class="term-table-wrap">
+      <table class="term-table">
+        <thead>
+          <tr>
+            <th class="term-cat-col">{{ _('Category') }}</th>
+            <th class="term-weight-col">{{ _('Weight') }}</th>
+            {% for t in valid_terms %}
+            <th class="term-col {{ 'term-col-released' if all_terms[t] else 'term-col-pending' }}">
+              Term {{ t }}
+              {% if all_terms[t] %}
+                <span class="term-th-badge released">âœ”</span>
+              {% else %}
+                <span class="term-th-badge pending">â€“</span>
+              {% endif %}
+            </th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+
+          {# â”€â”€ Score rows â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
+          {% for col in score_cols %}
+          <tr>
+            <td class="cat-name">{{ col_friendly[col] }}</td>
+            <td class="cat-weight">{{ weight_pct[col] }}</td>
+            {% for t in valid_terms %}
+              {% if all_terms[t] %}
+                {# Check for WF/AU status #}
+                {% set status_val = all_terms[t].get('Status', '') | string | upper | trim %}
+                {% if status_val in ('WF', 'AU') %}
+                  <td class="score-cell cn-special-status">{{ status_val }}</td>
+                {% else %}
+                  {% set s = all_terms[t][col] | float %}
+                  {% set lg = letter_grade(s) | trim %}
+                  <td class="score-cell">
+                    {{ "%.1f"|format(s) }}
+                    <span class="grade-badge grade-{{ lg }}">{{ lg }}</span>
+                  </td>
+                {% endif %}
+              {% else %}
+                <td class="nyr-cell">{{ _('Not Yet Released') }}</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+          {% endfor %}
+
+          {# â”€â”€ Total Grade row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
+          <tr class="final-report-row">
+            <td class="cat-name"><strong>{{ _('Final Report') }}</strong></td>
+            <td class="cat-weight">100%</td>
+            {% for t in valid_terms %}
+              {% if all_terms[t] %}
+                {% set status_val = all_terms[t].get('Status', '') | string | upper | trim %}
+                {% if status_val in ('WF', 'AU') %}
+                  <td class="score-cell score-final cn-special-status">{{ status_val }}</td>
+                {% else %}
+                  <td class="score-cell score-final">
+                    {{ "%.1f"|format(all_terms[t].TotalGrade | float) }}
+                  </td>
+                {% endif %}
+              {% else %}
+                <td class="nyr-cell">{{ _('Not Yet Released') }}</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+
+          {# â”€â”€ Letter Grade row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
+          <tr>
+            <td class="cat-name"><strong>Letter Grade</strong></td>
+            <td class="cat-weight">â€”</td>
+            {% for t in valid_terms %}
+              {% if all_terms[t] %}
+                {% set status_val = all_terms[t].get('Status', '') | string | upper | trim %}
+                {% if status_val in ('WF', 'AU') %}
+                  <td class="score-cell cn-special-status">{{ status_val }}</td>
+                {% else %}
+                  {% set tg = all_terms[t].TotalGrade | float %}
+                  {% set lg = letter_grade(tg) | trim %}
+                  <td class="score-cell">
+                    <span class="grade-badge grade-{{ lg }}">{{ lg }}</span>
+                    <span class="cn-grade-desc">{{ grade_label(tg) | trim }}</span>
+                  </td>
+                {% endif %}
+              {% else %}
+                <td class="nyr-cell">{{ _('Not Yet Released') }}</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+
+          {# â”€â”€ Grade Point row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
+          <tr>
+            <td class="cat-name"><strong>Grade Point</strong></td>
+            <td class="cat-weight">â€”</td>
+            {% for t in valid_terms %}
+              {% if all_terms[t] %}
+                {% set status_val = all_terms[t].get('Status', '') | string | upper | trim %}
+                {% if status_val in ('WF', 'AU') %}
+                  <td class="score-cell cn-special-status">{{ status_val }}</td>
+                {% else %}
+                  {% set tg = all_terms[t].TotalGrade | float %}
+                  <td class="score-cell cat-weight">{{ gp_range(tg) | trim }}</td>
+                {% endif %}
+              {% else %}
+                <td class="nyr-cell">{{ _('Not Yet Released') }}</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+
+          {# â”€â”€ Status row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
+          <tr class="status-row">
+            <td class="cat-name"><strong>{{ _('Status') }}</strong></td>
+            <td class="cat-weight">â€”</td>
+            {% for t in valid_terms %}
+              {% if all_terms[t] %}
+                {% set status_val = all_terms[t].get('Status', '') | string | upper | trim %}
+                {% if status_val == 'WF' %}
+                  <td class="status-cell" style="background:#fef9c3;color:#854d0e;">WF</td>
+                {% elif status_val == 'AU' %}
+                  <td class="status-cell" style="background:#f0f9ff;color:#0369a1;">AU</td>
+                {% else %}
+                  {% set tg = all_terms[t].TotalGrade | float %}
+                  {% if tg >= threshold %}
+                    <td class="status-cell status-pass-cell">âœ” {{ _('PASSED') }}</td>
+                  {% else %}
+                    <td class="status-cell status-fail-cell">âœ˜ {{ _('FAILED') }}</td>
+                  {% endif %}
+                {% endif %}
+              {% else %}
+                <td class="nyr-cell">{{ _('Not Yet Released') }}</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+
+          {# â”€â”€ Yearly Average â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #}
+          {% if ytd_avg is not none %}
+          <tr class="yearly-avg-row">
+            <td class="cat-name yearly-avg-label"><strong>Yearly Average</strong></td>
+            <td class="cat-weight">â€”</td>
+            <td colspan="{{ valid_terms | list | length }}" class="yearly-avg-cell">
+              <span class="yearly-avg-score">{{ "%.2f"|format(ytd_avg) }}</span>
+              <span class="yearly-avg-denom">/ 100</span>
+              <span class="badge-inline {{ 'badge-inline-pass' if ytd_passed else 'badge-inline-fail' }}">
+                {{ 'PASSING' if ytd_passed else 'FAILING' }}
+              </span>
+              <span class="yearly-avg-note">
+                ({{ all_terms.values() | select | list | length }} of 4 terms released)
+              </span>
+            </td>
+          </tr>
+          {% endif %}
+
+        </tbody>
+      </table>
+    </div><!-- /.term-table-wrap -->
+
+    <!-- â”€â”€ YTD visual â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+    {% if ytd_avg is not none %}
+    <h2 class="section-title" style="margin-top:1.5rem;">{{ _('Year-to-Date Average') }}</h2>
+    <div class="ytd-section">
+      <div class="ytd-score-block">
+        <span class="ytd-label">{{ _('Cumulative Average') }}</span>
+        <span class="ytd-score">{{ "%.2f"|format(ytd_avg) }} / 100</span>
+      </div>
+      <div class="ytd-bar-wrap">
+        <div class="ytd-bar"
+             style="width:{{ [ytd_avg,100]|min }}%;
+                    background:{{ '#16a34a' if ytd_passed else '#dc2626' }};"></div>
+      </div>
+      <div class="status-banner status-{{ 'pass' if ytd_passed else 'fail' }}"
+           style="margin-top:.75rem;">
+        {% if ytd_passed %}âœ” {{ _('OVERALL PASSING') }}{% else %}âœ˜ {{ _('OVERALL FAILING') }}{% endif %}
+        <span class="status-sub">({{ _('Passing threshold: %(pct)s%%', pct=threshold|int) }})</span>
+      </div>
+      <p class="ytd-note">
+        Based on {{ all_terms.values() | select | list | length }} released term(s) out of 4.
+        Final standing is determined at year-end.
+      </p>
+    </div>
+    {% else %}
+    <div class="ytd-empty">
+      {{ _('No term data has been released yet. Check back after your first term results.') }}
+    </div>
+    {% endif %}
+
+  </div><!-- #cn-view-master -->
+
+  <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+       SINGLE-TERM DETAIL VIEWS
+       â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+  {% for t in valid_terms %}
+  <div id="cn-view-term-{{ t }}" class="term-single-view" style="display:none;">
+
+    <div class="term-card-header">
+      <div>
+        <h2 class="term-card-title">Term {{ t }} Report â€” Chinese Department</h2>
+        <p class="term-card-sub">{{ student.Name }} &bull; {{ student.Class or 'â€”' }}</p>
+      </div>
+      {% if all_terms[t] %}
+        {% set status_val = all_terms[t].get('Status', '') | string | upper | trim %}
+        {% if status_val == 'WF' %}
+          <span class="term-status-badge"
+                style="background:#fef9c3;color:#854d0e;border-color:#fde68a;">WF</span>
+        {% elif status_val == 'AU' %}
+          <span class="term-status-badge"
+                style="background:#f0f9ff;color:#0369a1;border-color:#bae6fd;">AU</span>
+        {% else %}
+          {% set tg = all_terms[t].TotalGrade | float %}
+          {% if tg >= threshold %}
+            <span class="term-status-badge badge-status-pass">âœ” Passed</span>
+          {% else %}
+            <span class="term-status-badge badge-status-fail">âœ˜ Failed</span>
+          {% endif %}
+        {% endif %}
+      {% else %}
+        <span class="term-status-badge badge-status-incomplete">â€” Pending</span>
+      {% endif %}
+    </div><!-- /.term-card-header -->
+
+    <table class="score-table term-detail-table">
+      <thead>
+        <tr>
+          <th>{{ _('Category') }}</th>
+          <th class="td-ctr">{{ _('Weight') }}</th>
+          <th class="td-ctr">{{ _('Score / 100') }}</th>
+          <th class="td-ctr">{{ _('Grade') }}</th>
+          <th class="td-ctr">{{ _('Contribution') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for col in score_cols %}
+          {% if all_terms[t] %}
+            {% set status_val = all_terms[t].get('Status', '') | string | upper | trim %}
+            {% if status_val in ('WF', 'AU') %}
+              <tr>
+                <td class="cat-name">{{ col_friendly[col] }}</td>
+                <td class="td-ctr cat-weight">{{ weight_pct[col] }}</td>
+                <td class="nyr-cell td-ctr cn-special-status" colspan="3">{{ status_val }}</td>
+              </tr>
+            {% else %}
+              {% set s = all_terms[t][col] | float %}
+              {% set w = score_weights[col] %}
+              {% set lg = letter_grade(s) | trim %}
+              <tr>
+                <td class="cat-name">{{ col_friendly[col] }}</td>
+                <td class="td-ctr cat-weight">{{ weight_pct[col] }}</td>
+                <td class="td-ctr score-cell">{{ "%.1f"|format(s) }}</td>
+                <td class="td-ctr">
+                  <span class="grade-badge grade-{{ lg }}">{{ lg }}</span>
+                </td>
+                <td class="td-ctr cat-weight">{{ "%.2f"|format(s * w) }}</td>
+              </tr>
+            {% endif %}
+          {% else %}
+            <tr>
+              <td class="cat-name">{{ col_friendly[col] }}</td>
+              <td class="td-ctr cat-weight">{{ weight_pct[col] }}</td>
+              <td class="nyr-cell td-ctr" colspan="3">{{ _('Not Yet Released') }}</td>
+            </tr>
+          {% endif %}
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr class="term-detail-final-row">
+          <td colspan="2"><strong>{{ _('Final Report Score') }}</strong></td>
+          {% if all_terms[t] %}
+            {% set status_val = all_terms[t].get('Status', '') | string | upper | trim %}
+            {% if status_val in ('WF', 'AU') %}
+              <td class="nyr-cell td-ctr cn-special-status" colspan="3">{{ status_val }}</td>
+            {% else %}
+              <td class="td-ctr score-final" colspan="3">
+                {{ "%.2f"|format(all_terms[t].TotalGrade | float) }} / 100
+              </td>
+            {% endif %}
+          {% else %}
+            <td class="nyr-cell td-ctr" colspan="3">{{ _('Not Yet Released') }}</td>
+          {% endif %}
+        </tr>
+
+        {% if all_terms[t] %}
+          {% set status_val = all_terms[t].get('Status', '') | string | upper | trim %}
+          {% if status_val not in ('WF', 'AU') %}
+            {% set tg = all_terms[t].TotalGrade | float %}
+            {% set lg = letter_grade(tg) | trim %}
+        <tr>
+          <td colspan="2"><strong>Letter Grade &amp; Description</strong></td>
+          <td class="td-ctr" colspan="3">
+            <span class="grade-badge grade-{{ lg }}">{{ lg }}</span>
+            <span class="cn-grade-desc" style="margin-left:.5rem;">
+              {{ grade_label(tg) | trim }}
+            </span>
+          </td>
+        </tr>
+        <tr>
+          <td colspan="2"><strong>Grade Point</strong></td>
+          <td class="td-ctr cat-weight" colspan="3">{{ gp_range(tg) | trim }}</td>
+        </tr>
+          {% endif %}
+        {% endif %}
+
+        <tr class="status-row">
+          <td colspan="2"><strong>{{ _('Status') }}</strong></td>
+          {% if all_terms[t] %}
+            {% set status_val = all_terms[t].get('Status', '') | string | upper | trim %}
+            {% if status_val == 'WF' %}
+              <td class="status-cell td-ctr" colspan="3"
+                  style="background:#fef9c3;color:#854d0e;">
+                Withdrawal without Failure (WF)
+              </td>
+            {% elif status_val == 'AU' %}
+              <td class="status-cell td-ctr" colspan="3"
+                  style="background:#f0f9ff;color:#0369a1;">
+                Audit (AU) â€” No grade assigned
+              </td>
+            {% else %}
+              {% set tg = all_terms[t].TotalGrade | float %}
+              {% if tg >= threshold %}
+                <td class="status-cell status-pass-cell td-ctr" colspan="3">âœ” {{ _('PASSED') }}</td>
+              {% else %}
+                <td class="status-cell status-fail-cell td-ctr" colspan="3">âœ˜ {{ _('FAILED') }}</td>
+              {% endif %}
+            {% endif %}
+          {% else %}
+            <td class="nyr-cell td-ctr" colspan="3">{{ _('Not Yet Released') }}</td>
+          {% endif %}
+        </tr>
+      </tfoot>
+    </table>
+
+    {% if all_terms[t] %}
+      {% set status_val = all_terms[t].get('Status', '') | string | upper | trim %}
+      {% if status_val not in ('WF', 'AU') %}
+        {% set tg = all_terms[t].TotalGrade | float %}
+      <div class="term-progress-wrap">
+        <div class="term-progress-bar"
+             style="width:{{ [tg,100]|min }}%;
+                    background:{{ '#16a34a' if tg >= threshold else '#dc2626' }};"></div>
+      </div>
+      <p class="term-progress-label">
+        Score: <strong>{{ "%.2f"|format(tg) }}%</strong>
+        &nbsp;&bull;&nbsp; Passing threshold: {{ threshold | int }}%
+      </p>
+      {% endif %}
+    {% endif %}
+
+  </div><!-- #cn-view-term-{{ t }} -->
+  {% endfor %}
+
+  <!-- â”€â”€ Signature / footer area â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <div class="report-signature-area">
+    <div class="signature-block">
+      <div class="signature-line"></div>
+      <p>{{ _('Class Teacher') }}</p>
+    </div>
+    <div class="signature-block">
+      <div class="signature-line"></div>
+      <p>{{ _('Principal') }}</p>
+    </div>
+    <div class="signature-block">
+      <div class="signature-line"></div>
+      <p>{{ _('Parent / Guardian') }}</p>
+    </div>
+  </div>
+
+  <div class="cn-report-footer-date">
+    <span>Date: </span>
+    <span id="cn-footer-date"></span>
+    <script>
+      document.getElementById('cn-footer-date').textContent =
+        new Date().toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'});
+    </script>
+  </div>
+
+  <div class="report-print-row">
+    <button onclick="window.print()" class="btn btn-outline">ðŸ–¨ {{ _('Print Report') }}</button>
+    <a href="{{ url_for('cn_logout') }}" class="btn btn-primary">{{ _('Logout') }}</a>
+  </div>
+
+  <!-- â”€â”€ Accreditation footer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <div class="report-accreditation">
+    <span class="accreditation-label">{{ _('Accredited by') }}</span>
+    <div class="accreditation-logos">
+      <img src="{{ url_for('static', filename='tfsl-logo.png') }}"
+           alt="The Foundation for School Leadership"
+           class="accreditation-logo" />
+      <img src="{{ url_for('static', filename='tfsl-school-logo.png') }}"
+           alt="The Tribal School of Foreign Languages"
+           class="accreditation-logo" />
+    </div>
+  </div>
+
+</div><!-- /.report-card -->
+
+<script>
+  function cnSwitchView(val) {
+    document.getElementById('cn-view-master').style.display =
+      (val === 'master') ? 'block' : 'none';
+    [1, 2, 3, 4].forEach(function(t) {
+      var el = document.getElementById('cn-view-term-' + t);
+      if (el) el.style.display = (String(t) === val) ? 'block' : 'none';
+    });
+  }
+</script>
+
+{% endblock %}

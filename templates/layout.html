@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="{{ session.get('language', 'en') }}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Student Term Report Portal{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+
+  <!-- ── Navigation bar ─────────────────────────────────────────────────── -->
+  <header class="navbar">
+    <div class="navbar-brand">
+      <img src="{{ url_for('static', filename='teg-logo.png') }}"
+           alt="Tribal Education Group"
+           class="navbar-logo" />
+      <span class="navbar-title">Student Term Report Portal</span>
+    </div>
+    <nav class="navbar-links">
+      <a href="{{ url_for('index') }}">{{ _('Departments') }}</a>
+      {% if session.get('teacher_user') %}
+        <a href="{{ url_for('update') }}">{{ _('Teacher Portal') }}</a>
+      {% else %}
+        <a href="{{ url_for('teacher_login_select') }}">{{ _('Teacher Portal') }}</a>
+      {% endif %}
+      <a href="{{ url_for('admin_login') }}">{{ _('Admin') }}</a>
+      {% if session.get('is_hod') and session.get('teacher_user') %}
+        <a href="{{ url_for('hod_review') }}">{{ _('HOD Approvals') }}</a>
+        <span class="navbar-user">👤 {{ session['teacher_user'] }} (HOD)</span>
+        <a href="{{ url_for('teacher_logout') }}" class="btn-logout">{{ _('Teacher Logout') }}</a>
+      {% elif session.get('teacher_user') %}
+        <span class="navbar-user">👤 {{ session['teacher_user'] }}</span>
+        <a href="{{ url_for('teacher_logout') }}" class="btn-logout">{{ _('Teacher Logout') }}</a>
+      {% endif %}
+      {% if session.get('role') == 'admin' %}
+        <span class="navbar-user">🛡 {{ session['admin_user'] }}</span>
+        <a href="{{ url_for('admin_logout') }}" class="btn-logout">{{ _('Admin Logout') }}</a>
+      {% endif %}
+      {% if session.get('student_id') or session.get('cn_student_no') %}
+        <a href="{{ url_for('logout') if session.get('student_id') else url_for('cn_logout') }}" class="btn-logout">{{ _('Logout') }}</a>
+      {% endif %}
+      <!-- ── Language toggle ───────────────────────────── -->
+      <span class="lang-toggle-nav">
+        <a href="{{ url_for('set_language', lang='en') }}"
+           class="lang-btn {{ 'lang-btn-active' if session.get('language', 'en') == 'en' }}">🇺🇸</a>
+        <a href="{{ url_for('set_language', lang='km') }}"
+           class="lang-btn {{ 'lang-btn-active' if session.get('language') == 'km' }}">🇰🇭</a>
+      </span>
+    </nav>
+  </header>
+
+  <!-- ── Flash messages ─────────────────────────────────────────────────── -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-container">
+        {% for category, message in messages %}
+          <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <!-- ── Page content ───────────────────────────────────────────────────── -->
+  <main class="main-content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2025 {{ _('Student Term Report Portal') }} &mdash; {{ _('All rights reserved.') }}</p>
+  </footer>
+
+</body>
+</html>
