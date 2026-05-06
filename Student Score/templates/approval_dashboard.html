@@ -1,0 +1,337 @@
+{% extends "layout.html" %}
+{% block title %}Score Approval – Admin{% endblock %}
+
+{% block content %}
+<div class="admin-page">
+
+  <!-- ── Page header ─────────────────────────────────────────────────── -->
+  <div class="admin-header">
+    <div>
+      <h1 class="admin-title">Score Approval Dashboard</h1>
+      <p class="admin-subtitle">
+        Review each student's term scores, then approve or request changes individually.
+        Scores are hidden from parents until explicitly approved here.
+      </p>
+    </div>
+    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline btn-sm">
+      ← Back to Roster
+    </a>
+  </div>
+
+  <!-- ── Class + Term selector ───────────────────────────────────────── -->
+  <div class="admin-card">
+    <form method="GET" action="{{ url_for('approve_scores') }}" class="apv-selector-form">
+      <div class="apv-selector-row">
+        <div class="form-group apv-selector-class">
+          <label for="sel-class">Class</label>
+          <select id="sel-class" name="class_label" required>
+            <option value="">— Select Class —</option>
+            {% for cl in class_labels %}
+            <option value="{{ cl }}" {{ 'selected' if sel_class == cl }}>{{ cl }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group apv-selector-term">
+          <label>Term</label>
+          <div class="apv-term-btns">
+            {% for t in valid_terms %}
+            <label class="apv-term-radio {{ 'apv-term-active' if sel_term == t }}">
+              <input type="radio" name="term" value="{{ t }}"
+                     {{ 'checked' if sel_term == t }}
+                     onchange="this.form.submit()">
+              Term {{ t }}
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="form-group apv-selector-btn">
+          <label>&nbsp;</label>
+          <button type="submit" class="btn btn-secondary">View Students</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  {% if not sel_class %}
+  <!-- ── Empty state ─────────────────────────────────────────────────── -->
+  <div class="admin-card" style="text-align:center; padding: 2.5rem;">
+    <p style="color:var(--muted); font-family:'Arial',sans-serif; font-size:.95rem;">
+      Select a class and term above to review student scores.
+    </p>
+  </div>
+
+  {% else %}
+  <!-- ── Summary stat chips ──────────────────────────────────────────── -->
+  <div class="apv-stat-row">
+    <div class="stat-chip">
+      <span class="stat-num">{{ student_rows | length }}</span>
+      <span class="stat-lbl">Students</span>
+    </div>
+    {% if approved_count %}
+    <div class="stat-chip apv-stat-approved">
+      <span class="stat-num">{{ approved_count }}</span>
+      <span class="stat-lbl">Approved</span>
+    </div>
+    {% endif %}
+    {% if changes_count %}
+    <div class="stat-chip apv-stat-changes">
+      <span class="stat-num">{{ changes_count }}</span>
+      <span class="stat-lbl">Changes Req.</span>
+    </div>
+    {% endif %}
+    {% if pending_count %}
+    <div class="stat-chip apv-stat-pending">
+      <span class="stat-num">{{ pending_count }}</span>
+      <span class="stat-lbl">Pending</span>
+    </div>
+    {% endif %}
+    {% if nodata_count %}
+    <div class="stat-chip">
+      <span class="stat-num">{{ nodata_count }}</span>
+      <span class="stat-lbl">No Data</span>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- ── Student list ────────────────────────────────────────────────── -->
+  <div class="admin-card">
+    <div class="card-header">
+      <h2>
+        <span class="class-tag">{{ sel_class }}</span>
+        &mdash; Term {{ sel_term }} &mdash; Student Review
+      </h2>
+    </div>
+
+    {% if student_rows %}
+
+    {# Batch action form wraps the whole table #}
+    <form method="POST" action="{{ url_for('approve_scores') }}" id="batch-form">
+      <input type="hidden" name="class_label" value="{{ sel_class }}" />
+      <input type="hidden" name="term"        value="{{ sel_term }}" />
+      <input type="hidden" name="action"      value="batch_approve" />
+
+      <!-- Batch action bar -->
+      <div class="apv-batch-bar">
+        <label class="apv-check-all-label">
+          <input type="checkbox" id="check-all" onchange="toggleAll(this)" />
+          Select All
+        </label>
+        <button type="submit" class="btn btn-sm apv-btn-approve" id="batch-btn" disabled
+                onclick="return confirm('Approve all selected students for {{ sel_class }} – Term {{ sel_term }}?')">
+          ✔ Approve Selected
+          (<span id="selected-count">0</span>)
+        </button>
+      </div>
+
+      <!-- Scores table -->
+      <div class="admin-table-wrap">
+        <table class="admin-table apv-student-table">
+          <thead>
+            <tr>
+              <th class="apv-chk-col"></th>
+              <th class="apv-name-col">Student</th>
+              <th class="apv-score-col">Conduct<br><span class="apv-wt">5%</span></th>
+              <th class="apv-score-col">Class Part.<br><span class="apv-wt">5%</span></th>
+              <th class="apv-score-col">HW &amp; Assign.<br><span class="apv-wt">15%</span></th>
+              <th class="apv-score-col">Quiz<br><span class="apv-wt">15%</span></th>
+              <th class="apv-score-col">Mid-Term<br><span class="apv-wt">25%</span></th>
+              <th class="apv-score-col">Final Exam<br><span class="apv-wt">35%</span></th>
+              <th class="apv-final-col">Final Report</th>
+              <th class="apv-status-col">Status</th>
+              <th class="apv-actions-col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in student_rows %}
+            {% set uid = loop.index %}
+            <tr class="apv-student-row
+                        {%- if row.status == 'approved' %} apv-row-approved
+                        {%- elif row.status == 'changes_requested' %} apv-row-changes
+                        {%- elif row.grades is none %} apv-row-nodata
+                        {%- else %} apv-row-pending{% endif %}">
+
+              <!-- Checkbox (only if grades exist) -->
+              <td class="apv-chk-col">
+                {% if row.grades and row.status != 'approved' %}
+                <input type="checkbox" name="student_ids" value="{{ row.student_id }}"
+                       class="row-check" onchange="updateCount()" />
+                {% endif %}
+              </td>
+
+              <!-- Name + ID -->
+              <td class="apv-name-col">
+                <div class="apv-student-name">{{ row.name }}</div>
+                <div class="apv-student-id">{{ row.student_id or '—' }}</div>
+              </td>
+
+              <!-- Six score columns -->
+              {% for col in score_cols %}
+              <td class="apv-score-col">
+                {% if row.grades %}
+                  {{ "%.1f"|format(row.grades[col]|float) }}
+                {% else %}
+                  <span class="apv-no-score">—</span>
+                {% endif %}
+              </td>
+              {% endfor %}
+
+              <!-- Final Report -->
+              <td class="apv-final-col">
+                {% if row.grades %}
+                  <strong>{{ "%.2f"|format(row.grades.FinalReport|float) }}</strong>
+                {% else %}
+                  <span class="apv-no-score">—</span>
+                {% endif %}
+              </td>
+
+              <!-- Status badge -->
+              <td class="apv-status-col">
+                {% if row.status == 'approved' %}
+                  <span class="apv-badge apv-badge-approved">✔ Approved</span>
+                {% elif row.status == 'changes_requested' %}
+                  <span class="apv-badge apv-badge-changes">⚠ Changes Req.</span>
+                  {% if row.note %}
+                  <div class="apv-existing-note">
+                    <span class="apv-note-label">Note:</span>
+                    <span class="apv-note-text">{{ row.note }}</span>
+                  </div>
+                  {% endif %}
+                {% elif row.grades is none %}
+                  <span class="apv-badge apv-badge-nodata">— No data</span>
+                {% else %}
+                  <span class="apv-badge apv-badge-pending">⏳ Pending</span>
+                {% endif %}
+              </td>
+
+              <!-- Actions -->
+              <td class="apv-actions-col">
+                {% if row.grades %}
+
+                  <!-- Approve (non-approved only) -->
+                  {% if row.status != 'approved' %}
+                  <form method="POST" action="{{ url_for('approve_scores') }}"
+                        class="apv-form">
+                    <input type="hidden" name="class_label" value="{{ sel_class }}" />
+                    <input type="hidden" name="term"        value="{{ sel_term }}" />
+                    <input type="hidden" name="student_id"  value="{{ row.student_id }}" />
+                    <input type="hidden" name="action"      value="approve" />
+                    <button type="submit" class="btn btn-xs apv-btn-approve">
+                      ✔ Approve
+                    </button>
+                  </form>
+                  {% endif %}
+
+                  <!-- Revoke (approved only) -->
+                  {% if row.status == 'approved' %}
+                  <form method="POST" action="{{ url_for('approve_scores') }}"
+                        class="apv-form">
+                    <input type="hidden" name="class_label" value="{{ sel_class }}" />
+                    <input type="hidden" name="term"        value="{{ sel_term }}" />
+                    <input type="hidden" name="student_id"  value="{{ row.student_id }}" />
+                    <input type="hidden" name="action"      value="revoke" />
+                    <button type="submit" class="btn btn-xs apv-btn-revoke"
+                      onclick="return confirm('Revoke approval for {{ row.name }}?\nScore will be hidden from parents immediately.')">
+                      Revoke
+                    </button>
+                  </form>
+                  {% endif %}
+
+                  <!-- Request Changes (non-approved only) -->
+                  {% if row.status != 'approved' %}
+                  <div class="apv-request-wrap">
+                    <button type="button" class="btn btn-xs apv-btn-request"
+                            onclick="toggleRequest('{{ uid }}')">
+                      ✎ Request Changes
+                    </button>
+                    <form method="POST" action="{{ url_for('approve_scores') }}"
+                          class="apv-request-form"
+                          id="req-{{ uid }}"
+                          style="display:none;">
+                      <input type="hidden" name="class_label" value="{{ sel_class }}" />
+                      <input type="hidden" name="term"        value="{{ sel_term }}" />
+                      <input type="hidden" name="student_id"  value="{{ row.student_id }}" />
+                      <input type="hidden" name="action"      value="request_changes" />
+                      <textarea name="request_note" class="apv-note-textarea"
+                                placeholder="Describe what needs correcting…"
+                                rows="2">{{ row.note }}</textarea>
+                      <div class="apv-request-btns">
+                        <button type="submit" class="btn btn-xs apv-btn-send-request">
+                          Send
+                        </button>
+                        <button type="button" class="btn btn-xs btn-outline"
+                                onclick="toggleRequest('{{ uid }}')">
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                  {% endif %}
+
+                {% endif %}<!-- /row.grades -->
+
+                <!-- View Report (preview) -->
+                {% if row.student_id %}
+                <a href="{{ url_for('admin_student_preview', student_id=row.student_id) }}"
+                   class="btn btn-xs btn-outline apv-btn-preview"
+                   target="_blank">
+                  👁 View
+                </a>
+                {% endif %}
+
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div><!-- .admin-table-wrap -->
+
+    </form><!-- #batch-form -->
+
+    {% else %}
+    <div class="admin-empty">
+      No students found in <strong>{{ sel_class }}</strong>.
+    </div>
+    {% endif %}
+
+  </div><!-- .admin-card -->
+
+  <p class="apv-footer-note">
+    Approvals are per-student, per-term. Revoking hides scores from parents immediately.
+    "View" opens a preview of exactly what the parent would see once approved.
+  </p>
+
+  {% endif %}<!-- /sel_class -->
+
+</div><!-- .admin-page -->
+
+<script>
+  function toggleRequest(uid) {
+    var form = document.getElementById('req-' + uid);
+    if (form) {
+      form.style.display = (form.style.display === 'none') ? 'block' : 'none';
+    }
+  }
+
+  function updateCount() {
+    var checked = document.querySelectorAll('.row-check:checked').length;
+    document.getElementById('selected-count').textContent = checked;
+    document.getElementById('batch-btn').disabled = (checked === 0);
+
+    // Sync the check-all box
+    var all = document.querySelectorAll('.row-check');
+    var ca  = document.getElementById('check-all');
+    if (ca) {
+      ca.indeterminate = (checked > 0 && checked < all.length);
+      ca.checked       = (checked === all.length && all.length > 0);
+    }
+  }
+
+  function toggleAll(cb) {
+    document.querySelectorAll('.row-check').forEach(function(c) {
+      c.checked = cb.checked;
+    });
+    updateCount();
+  }
+</script>
+
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends "layout.html" %}
+{% block title %}Select Department – Student Report Portal{% endblock %}
+
+{% block content %}
+<div class="landing-hero">
+  <h1 class="landing-title">{{ _('Welcome to the Student Report Portal') }}</h1>
+  <p class="landing-subtitle">
+    {{ _('Select your department below to view a term report card.') }}
+  </p>
+
+  <div class="dept-cards">
+
+    <form method="POST" action="{{ url_for('select_department') }}">
+      <input type="hidden" name="department" value="english" />
+      <button type="submit" class="dept-card dept-card-english">
+        <div class="dept-card-flag">
+          <img src="{{ url_for('static', filename='Flag_of_the_United_Kingdom.svg.png') }}"
+               alt="British Flag"
+               class="dept-flag" />
+        </div>
+        <div class="dept-card-name">{{ _('English Department') }}</div>
+        <div class="dept-card-sub">EN Program</div>
+      </button>
+    </form>
+
+    <form method="POST" action="{{ url_for('select_department') }}">
+      <input type="hidden" name="department" value="chinese" />
+      <button type="submit" class="dept-card dept-card-chinese">
+        <div class="dept-card-flag">
+          <img src="{{ url_for('static', filename="Flag_of_the_People's_Republic_of_China.svg.png") }}"
+               alt="Chinese Flag"
+               class="dept-flag" />
+        </div>
+        <div class="dept-card-name">{{ _('Chinese Department') }}</div>
+        <div class="dept-card-sub">CN Program</div>
+      </button>
+    </form>
+
+  </div><!-- /.dept-cards -->
+</div><!-- /.landing-hero -->
+{% endblock %}
