@@ -87,7 +87,7 @@
     <div class="report-meta-item">
       <span class="meta-label">{{ _('Terms Released') }}</span>
       <span class="meta-value">
-        {{ all_terms.values() | select | list | length }} / 4
+        {{ all_terms.values() | select | list | length }} / {{ valid_terms | list | length }}
       </span>
     </div>
   </div>
@@ -142,11 +142,11 @@
             {% for t in valid_terms %}
               {% if all_terms[t] %}
                 {% set s = all_terms[t][col] | float %}
-                {% if   s >= 90 %}{% set letter = 'A' %}
-                {% elif s >= 80 %}{% set letter = 'B' %}
-                {% elif s >= 70 %}{% set letter = 'C' %}
-                {% elif s >= 60 %}{% set letter = 'D' %}
-                {% else          %}{% set letter = 'F' %}
+                {% if   s >= 85 %}{% set letter = 'A' %}
+                {% elif s >= 70 %}{% set letter = 'B' %}
+                {% elif s >= 60 %}{% set letter = 'C' %}
+                {% elif s >= threshold %}{% set letter = 'D' %}
+                {% else              %}{% set letter = 'F' %}
                 {% endif %}
                 <td class="score-cell">
                   {{ "%.1f"|format(s) }}
@@ -204,7 +204,7 @@
                 {{ 'PASSING' if ytd_passed else 'FAILING' }}
               </span>
               <span class="yearly-avg-note">
-                ({{ all_terms.values() | select | list | length }} of 4 terms released)
+                ({{ all_terms.values() | select | list | length }} of {{ valid_terms | list | length }} terms released)
               </span>
             </td>
           </tr>
@@ -233,7 +233,7 @@
       </div>
       <p class="ytd-note">
         Based on {{ all_terms.values() | select | list | length }}
-        released term(s) out of 4. Final standing is determined at year-end.
+        released term(s) out of {{ valid_terms | list | length }}. Final standing is determined at year-end.
       </p>
     </div>
     {% else %}
@@ -285,11 +285,11 @@
           {% if all_terms[t] %}
             {% set s = all_terms[t][col] | float %}
             {% set w = score_weights[col] %}
-            {% if   s >= 90 %}{% set letter = 'A' %}
-            {% elif s >= 80 %}{% set letter = 'B' %}
-            {% elif s >= 70 %}{% set letter = 'C' %}
-            {% elif s >= 60 %}{% set letter = 'D' %}
-            {% else          %}{% set letter = 'F' %}
+            {% if   s >= 85 %}{% set letter = 'A' %}
+            {% elif s >= 70 %}{% set letter = 'B' %}
+            {% elif s >= 60 %}{% set letter = 'C' %}
+            {% elif s >= threshold %}{% set letter = 'D' %}
+            {% else              %}{% set letter = 'F' %}
             {% endif %}
             <tr>
               <td class="cat-name">{{ col_friendly[col] }}</td>
@@ -395,10 +395,12 @@
 </div>
 
 <script>
+  const VALID_TERMS = {{ valid_terms | list | tojson }};
+
   function switchView(val) {
     document.getElementById('view-master').style.display =
       (val === 'master') ? 'block' : 'none';
-    [1, 2, 3, 4].forEach(function(t) {
+    VALID_TERMS.forEach(function(t) {
       var el = document.getElementById('view-term-' + t);
       if (el) el.style.display = (String(t) === val) ? 'block' : 'none';
     });

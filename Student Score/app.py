@@ -30,6 +30,7 @@ POST /update/save       → teacher: validate, calculate, upsert row
 """
 
 import os
+import re
 import pandas as pd
 from flask import (
     Flask,
@@ -83,7 +84,9 @@ SCORE_WEIGHTS = {
 }
 
 VALID_TERMS    = (1, 2, 3, 4)
-PASS_THRESHOLD = 50.0
+EN_VALID_TERMS = (1, 2, 3, 4, 5)
+PASS_THRESHOLD = 60.0
+LOWER_LEVEL_PASS_THRESHOLD = 50.0
 
 # ── Chinese Department constants ──────────────────────────────────────────────
 CN_EXCEL_PATH    = os.path.join(BASE_DIR, "chinese_grades.xlsx")
@@ -97,6 +100,73 @@ CN_SCORE_WEIGHTS = {
 }
 CN_PASS_THRESHOLD = 60.0
 CN_VALID_TERMS    = (1, 2, 3, 4)
+
+
+def parse_level_number(level_value):
+    """Extract the numeric level from Excel values such as 'Level 2', 'L2', or 2."""
+    if level_value is None or pd.isna(level_value):
+        return None
+    if isinstance(level_value, (int, float)) and not isinstance(level_value, bool):
+        try:
+            return int(level_value)
+        except (TypeError, ValueError):
+            return None
+    match = re.search(r"(\d+)", str(level_value).strip())
+    return int(match.group(1)) if match else None
+
+
+def get_student_pass_threshold(student_info: dict | None) -> float:
+    """Return the English passing threshold for a student based on Level."""
+    info = student_info or {}
+    level_num = parse_level_number(info.get("Level"))
+    if level_num is None:
+        # Backward-compatible fallback: some workbooks encode level in ClassLabel (e.g. L1T2).
+        level_num = parse_level_number(info.get("ClassLabel"))
+    if level_num in (1, 2, 3):
+        return LOWER_LEVEL_PASS_THRESHOLD
+    return PASS_THRESHOLD
+
+
+def get_student_valid_terms(student_info: dict | None):
+    """Return the English term set for a student based on Level."""
+    info = student_info or {}
+    level_num = parse_level_number(info.get("Level"))
+    if level_num is None:
+        # Backward-compatible fallback: some workbooks encode level in ClassLabel (e.g. L1T2).
+        level_num = parse_level_number(info.get("ClassLabel"))
+    if level_num in (1, 2):
+        return EN_VALID_TERMS
+    return VALID_TERMS
+
+
+def summarize_term_results(all_terms: dict, threshold: float):
+    """Return the year-to-date average and pass/fail state for released terms."""
+    completed = [term for term in all_terms.values() if term is not None]
+    if not completed:
+        return None, False
+
+    ytd_avg = round(
+        sum(float(term["FinalReport"]) for term in completed) / len(completed), 2
+    )
+    return ytd_avg, ytd_avg >= threshold
+
+
+def get_letter_grade(score: float, student_info: dict | None = None) -> str:
+    """
+    Return the letter grade for an English-department score.
+    A: 85-100 | B: 70-84 | C: 60-69 | D: threshold-59 | F: below threshold
+    The D/F boundary equals the student's pass threshold (50 for L1-3, 60 for L4+).
+    """
+    d_floor = get_student_pass_threshold(student_info)
+    if score >= 85:
+        return 'A'
+    if score >= 70:
+        return 'B'
+    if score >= 60:
+        return 'C'
+    if score >= d_floor:
+        return 'D'
+    return 'F'
 
 # ── Helpers: I/O ───────────────────────────────────────────────────────────────
 
@@ -509,12 +579,13 @@ def get_student_term(grades_df: pd.DataFrame, student_id: str, term: int):
     return match.iloc[0].to_dict()
 
 
-def get_all_terms(grades_df: pd.DataFrame, student_id: str) -> dict:
+def get_all_terms(grades_df: pd.DataFrame, student_id: str, valid_terms=None) -> dict:
     """
     Return {1: row_dict_or_None, 2: ..., 3: ..., 4: ...} for a student.
     Terms with no data are None — displayed as 'Not Yet Released'.
     """
-    return {t: get_student_term(grades_df, student_id, t) for t in VALID_TERMS}
+    terms = valid_terms if valid_terms is not None else VALID_TERMS
+    return {t: get_student_term(grades_df, student_id, t) for t in terms}
 
 
 @app.route("/debug/check-teacher", methods=["GET"])
@@ -654,8 +725,11 @@ def report():
         session.clear()
         return redirect(url_for("login"))
 
+    valid_terms = get_student_valid_terms(student_info)
+    threshold = get_student_pass_threshold(student_info)
+
     # Build per-term data (None = not yet released)
-    all_terms = get_all_terms(grades_df, session["student_id"])
+    all_terms = get_all_terms(grades_df, session["student_id"], valid_terms)
 
     # ── Approval gate ──────────────────────────────────────────────────────────
     # Even if scores exist in Grades, parents only see them once the
@@ -668,16 +742,7 @@ def report():
     }
     # ──────────────────────────────────────────────────────────────────────────
 
-    # Year-to-date average: average FinalReport of all released terms only
-    completed = [t for t in all_terms.values() if t is not None]
-    if completed:
-        ytd_avg    = round(
-            sum(float(t["FinalReport"]) for t in completed) / len(completed), 2
-        )
-        ytd_passed = ytd_avg >= PASS_THRESHOLD
-    else:
-        ytd_avg    = None
-        ytd_passed = False
+    ytd_avg, ytd_passed = summarize_term_results(all_terms, threshold)
 
     return render_template(
         "report.html",
@@ -687,8 +752,8 @@ def report():
         score_weights = SCORE_WEIGHTS,
         ytd_avg      = ytd_avg,
         ytd_passed   = ytd_passed,
-        threshold    = PASS_THRESHOLD,
-        valid_terms  = VALID_TERMS,
+        threshold    = threshold,
+        valid_terms  = valid_terms,
     )
 
 
@@ -775,7 +840,7 @@ def hod_review():
 
         try:
             term = int(term_raw)
-            if term not in VALID_TERMS:
+            if term not in EN_VALID_TERMS:
                 raise ValueError
         except (ValueError, TypeError):
             flash("Invalid term value.", "error")
@@ -848,7 +913,7 @@ def hod_review():
     sel_class    = request.args.get("class_label", "").strip()
     try:
         sel_term = int(request.args.get("term", "1"))
-        if sel_term not in VALID_TERMS:
+        if sel_term not in EN_VALID_TERMS:
             sel_term = 1
     except (ValueError, TypeError):
         sel_term = 1
@@ -879,7 +944,7 @@ def hod_review():
         sel_class      = sel_class,
         sel_term       = sel_term,
         student_rows   = student_rows,
-        valid_terms    = VALID_TERMS,
+        valid_terms    = EN_VALID_TERMS,
         score_cols     = SCORE_COLS,
         approved_count = approved_count,
         changes_count  = changes_count,
@@ -911,18 +976,10 @@ def hod_student_preview(student_id):
         flash(f'Student "{student_id}" not found.', "error")
         return redirect(url_for("hod_review"))
 
-    # No approval gate — show all available term data
-    all_terms = get_all_terms(grades_df, student_id)
-
-    completed = [t for t in all_terms.values() if t is not None]
-    if completed:
-        ytd_avg    = round(
-            sum(float(t["FinalReport"]) for t in completed) / len(completed), 2
-        )
-        ytd_passed = ytd_avg >= PASS_THRESHOLD
-    else:
-        ytd_avg    = None
-        ytd_passed = False
+    valid_terms = get_student_valid_terms(student_info)
+    threshold = get_student_pass_threshold(student_info)
+    all_terms = get_all_terms(grades_df, student_id, valid_terms)
+    ytd_avg, ytd_passed = summarize_term_results(all_terms, threshold)
 
     return render_template(
         "report.html",
@@ -932,8 +989,8 @@ def hod_student_preview(student_id):
         score_weights    = SCORE_WEIGHTS,
         ytd_avg          = ytd_avg,
         ytd_passed       = ytd_passed,
-        threshold        = PASS_THRESHOLD,
-        valid_terms      = VALID_TERMS,
+        threshold        = threshold,
+        valid_terms      = valid_terms,
         preview_mode     = True,
         hod_preview      = True,
     )
@@ -944,7 +1001,7 @@ def hod_student_preview(student_id):
 def _render_update(student=None, term=None, class_label=None,
                    class_labels=None, class_students_map=None, error=None,
                    changes_requested=None, score_cols=None, score_weights=None,
-                   valid_terms=None):
+                   valid_terms=None, preview_threshold=None):
     """Central render helper — keeps all three route functions DRY."""
     if error:
         flash(error, "error")
@@ -957,7 +1014,8 @@ def _render_update(student=None, term=None, class_label=None,
         class_students_map   = class_students_map or {},
         score_cols           = score_cols if score_cols is not None else SCORE_COLS,
         score_weights        = score_weights if score_weights is not None else SCORE_WEIGHTS,
-        valid_terms          = valid_terms if valid_terms is not None else VALID_TERMS,
+        valid_terms          = valid_terms if valid_terms is not None else EN_VALID_TERMS,
+        preview_threshold    = PASS_THRESHOLD if preview_threshold is None else preview_threshold,
         changes_requested    = changes_requested or [],
     )
 
@@ -982,17 +1040,19 @@ def _load_for_update(dept="en"):
     return students_df, grades_df, class_labels, class_students_map
 
 
-def _validate_term(raw: str):
+def _validate_term(raw: str, allowed_terms=None):
     """
     Return (int_term, None) on success or (None, error_message) on failure.
     """
+    allowed_terms = tuple(allowed_terms) if allowed_terms is not None else EN_VALID_TERMS
     try:
         t = int(raw)
-        if t not in VALID_TERMS:
+        if t not in allowed_terms:
             raise ValueError
         return t, None
     except (ValueError, TypeError):
-        return None, f"Term must be 1, 2, 3, or 4. Received: '{raw}'."
+        terms_text = ", ".join(str(term) for term in allowed_terms)
+        return None, f"Term must be one of {terms_text}. Received: '{raw}'."
 
 
 @app.route("/update", methods=["GET"])
@@ -1004,7 +1064,7 @@ def update():
     dept = session.get("teacher_dept", "en")
     sc   = CN_SCORE_COLS    if dept == "cn" else SCORE_COLS
     sw   = CN_SCORE_WEIGHTS if dept == "cn" else SCORE_WEIGHTS
-    vt   = CN_VALID_TERMS   if dept == "cn" else VALID_TERMS
+    vt   = CN_VALID_TERMS   if dept == "cn" else EN_VALID_TERMS
 
     prefill_id    = request.args.get("student_id",  "").strip()
     prefill_term  = request.args.get("term",         "").strip()
@@ -1024,7 +1084,7 @@ def update():
                 sid = str(s.get("StudentID", "")).strip()
                 if not sid:
                     continue
-                for t in VALID_TERMS:
+                for t in EN_VALID_TERMS:
                     if term_review_status(approval_df, sid, t) == "changes_requested":
                         row = get_approval_row(approval_df, sid, t)
                         changes_requested.append({
@@ -1036,14 +1096,18 @@ def update():
                         })
 
     if prefill_id and prefill_term:
-        term, err = _validate_term(prefill_term)
+        prefill_info = None if dept == "cn" else get_student_info(students_df, prefill_id)
+        prefill_terms = CN_VALID_TERMS if dept == "cn" else get_student_valid_terms(prefill_info)
+        prefill_threshold = CN_PASS_THRESHOLD if dept == "cn" else get_student_pass_threshold(prefill_info)
+        term, err = _validate_term(prefill_term, prefill_terms)
         if err:
             return _render_update(
                 class_labels=class_labels,
                 class_students_map=class_students_map,
                 changes_requested=changes_requested,
                 error=err,
-                score_cols=sc, score_weights=sw, valid_terms=vt,
+                score_cols=sc, score_weights=sw, valid_terms=prefill_terms,
+                preview_threshold=prefill_threshold,
             )
         if dept == "cn":
             grade_row = cn_get_term(grades_df, prefill_id, term)
@@ -1066,7 +1130,8 @@ def update():
             class_labels=class_labels,
             class_students_map=class_students_map,
             changes_requested=changes_requested,
-            score_cols=sc, score_weights=sw, valid_terms=vt,
+            score_cols=sc, score_weights=sw, valid_terms=prefill_terms,
+            preview_threshold=prefill_threshold,
         )
 
     return _render_update(
@@ -1091,7 +1156,7 @@ def update_search():
     dept = session.get("teacher_dept", "en")
     sc   = CN_SCORE_COLS    if dept == "cn" else SCORE_COLS
     sw   = CN_SCORE_WEIGHTS if dept == "cn" else SCORE_WEIGHTS
-    vt   = CN_VALID_TERMS   if dept == "cn" else VALID_TERMS
+    vt   = CN_VALID_TERMS   if dept == "cn" else EN_VALID_TERMS
 
     class_label = request.form.get("class_label", "").strip()
     student_id  = request.form.get("student_id",  "").strip()
@@ -1111,16 +1176,6 @@ def update_search():
             score_cols=sc, score_weights=sw, valid_terms=vt,
         )
 
-    term, err = _validate_term(term_raw)
-    if err:
-        return _render_update(
-            class_label=class_label,
-            class_labels=class_labels,
-            class_students_map=class_students_map,
-            error=err,
-            score_cols=sc, score_weights=sw, valid_terms=vt,
-        )
-
     # Verify the student exists in the Students sheet
     student_info = get_student_info(students_df, student_id)
     if student_info is None:
@@ -1130,8 +1185,20 @@ def update_search():
             class_students_map=class_students_map,
             error=f'No student found with ID "{student_id}". '
                   f"Please check the selection and try again.",
-            term=term,
             score_cols=sc, score_weights=sw, valid_terms=vt,
+        )
+
+    student_terms = CN_VALID_TERMS if dept == "cn" else get_student_valid_terms(student_info)
+    student_threshold = CN_PASS_THRESHOLD if dept == "cn" else get_student_pass_threshold(student_info)
+    term, err = _validate_term(term_raw, student_terms)
+    if err:
+        return _render_update(
+            class_label=class_label,
+            class_labels=class_labels,
+            class_students_map=class_students_map,
+            error=err,
+            score_cols=sc, score_weights=sw, valid_terms=student_terms,
+            preview_threshold=student_threshold,
         )
 
     # Find the specific term grade row
@@ -1166,7 +1233,8 @@ def update_search():
         class_label=class_label,
         class_labels=class_labels,
         class_students_map=class_students_map,
-        score_cols=sc, score_weights=sw, valid_terms=vt,
+        score_cols=sc, score_weights=sw, valid_terms=student_terms,
+        preview_threshold=student_threshold,
     )
 
 
@@ -1185,16 +1253,43 @@ def update_save():
     dept = session.get("teacher_dept", "en")
     sc   = CN_SCORE_COLS    if dept == "cn" else SCORE_COLS
     sw   = CN_SCORE_WEIGHTS if dept == "cn" else SCORE_WEIGHTS
-    vt   = CN_VALID_TERMS   if dept == "cn" else VALID_TERMS
+    vt   = CN_VALID_TERMS   if dept == "cn" else EN_VALID_TERMS
 
     class_label = request.form.get("class_label", "").strip()
     student_id  = request.form.get("student_id",  "").strip()
     term_raw    = request.form.get("term",         "").strip()
 
-    # ── Step 1: validate term ──────────────────────────────────────────────────
-    term, term_err = _validate_term(term_raw)
+    # ── Step 1: load workbook and student policy ───────────────────────────────
+    try:
+        students_df, grades_df, class_labels, class_students_map = _load_for_update(dept)
+    except (FileNotFoundError, OSError) as exc:
+        return _render_update(error=str(exc), term=term_raw, score_cols=sc, score_weights=sw, valid_terms=vt)
+
+    student_info = get_student_info(students_df, student_id)
+    if student_info is None:
+        return _render_update(
+            class_labels=class_labels,
+            class_students_map=class_students_map,
+            error=f'Student "{student_id}" not found.',
+            term=term_raw,
+            score_cols=sc, score_weights=sw, valid_terms=vt,
+        )
+
+    student_terms = CN_VALID_TERMS if dept == "cn" else get_student_valid_terms(student_info)
+    student_threshold = CN_PASS_THRESHOLD if dept == "cn" else get_student_pass_threshold(student_info)
+    term, term_err = _validate_term(term_raw, student_terms)
     if term_err:
-        return _render_update(error=term_err, score_cols=sc, score_weights=sw, valid_terms=vt)
+        return _render_update(
+            error=term_err,
+            class_label=class_label,
+            class_labels=class_labels,
+            class_students_map=class_students_map,
+            term=term_raw,
+            score_cols=sc,
+            score_weights=sw,
+            valid_terms=student_terms,
+            preview_threshold=student_threshold,
+        )
 
     # ── Step 2: validate score inputs ─────────────────────────────────────────
     scores = {}
@@ -1206,7 +1301,6 @@ def update_save():
                 raise ValueError(f"out of range: {value}")
         except ValueError:
             try:
-                students_df, grades_df, class_labels, class_students_map = _load_for_update(dept)
                 if dept == "cn":
                     student = cn_get_term(grades_df, student_id, term)
                     if student is not None:
@@ -1233,25 +1327,10 @@ def update_save():
                 class_label=class_label,
                 class_labels=class_labels,
                 class_students_map=class_students_map,
-                score_cols=sc, score_weights=sw, valid_terms=vt,
+                score_cols=sc, score_weights=sw, valid_terms=student_terms,
+                preview_threshold=student_threshold,
             )
         scores[col] = value
-
-    # ── Step 3: load workbook ──────────────────────────────────────────────────
-    try:
-        students_df, grades_df, class_labels, class_students_map = _load_for_update(dept)
-    except (FileNotFoundError, OSError) as exc:
-        return _render_update(error=str(exc), term=term, score_cols=sc, score_weights=sw, valid_terms=vt)
-
-    student_info = get_student_info(students_df, student_id)
-    if student_info is None:
-        return _render_update(
-            class_labels=class_labels,
-            class_students_map=class_students_map,
-            error=f'Student "{student_id}" not found.',
-            term=term,
-            score_cols=sc, score_weights=sw, valid_terms=vt,
-        )
 
     student_name = student_info["Name"]
 
@@ -1295,7 +1374,8 @@ def update_save():
             return _render_update(
                 term=term, class_label=class_label,
                 class_labels=class_labels, class_students_map=class_students_map,
-                score_cols=sc, score_weights=sw, valid_terms=vt,
+                score_cols=sc, score_weights=sw, valid_terms=student_terms,
+                preview_threshold=student_threshold,
             )
 
         flash(
@@ -1355,7 +1435,8 @@ def update_save():
             class_label=class_label,
             class_labels=class_labels,
             class_students_map=class_students_map,
-            score_cols=sc, score_weights=sw, valid_terms=vt,
+            score_cols=sc, score_weights=sw, valid_terms=student_terms,
+            preview_threshold=student_threshold,
         )
 
     flash(
@@ -1679,18 +1760,10 @@ def admin_student_preview(student_id):
         flash(f'Student "{student_id}" not found.', "error")
         return redirect(url_for("approve_scores"))
 
-    # No approval gate — show all available term data
-    all_terms = get_all_terms(grades_df, student_id)
-
-    completed = [t for t in all_terms.values() if t is not None]
-    if completed:
-        ytd_avg    = round(
-            sum(float(t["FinalReport"]) for t in completed) / len(completed), 2
-        )
-        ytd_passed = ytd_avg >= PASS_THRESHOLD
-    else:
-        ytd_avg    = None
-        ytd_passed = False
+    valid_terms = get_student_valid_terms(student_info)
+    threshold = get_student_pass_threshold(student_info)
+    all_terms = get_all_terms(grades_df, student_id, valid_terms)
+    ytd_avg, ytd_passed = summarize_term_results(all_terms, threshold)
 
     return render_template(
         "report.html",
@@ -1700,8 +1773,8 @@ def admin_student_preview(student_id):
         score_weights = SCORE_WEIGHTS,
         ytd_avg       = ytd_avg,
         ytd_passed    = ytd_passed,
-        threshold     = PASS_THRESHOLD,
-        valid_terms   = VALID_TERMS,
+        threshold     = threshold,
+        valid_terms   = valid_terms,
         preview_mode  = True,
     )
 

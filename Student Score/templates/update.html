@@ -242,15 +242,15 @@
    Javascript: live FinalReport calculation + student dropdown filter
    ══════════════════════════════════════════════════════════════════ #}
 <script>
-  const PASS_THRESHOLD = 60;
+  const PASS_THRESHOLD = {{ preview_threshold | default(60) | tojson }};
   const SCORE_COLS     = {{ score_cols | tojson }};
   const SCORE_WEIGHTS  = {{ score_weights | tojson }};
 
   function getLetterGrade(score) {
-    if (score >= 90) return 'A';
-    if (score >= 80) return 'B';
-    if (score >= 70) return 'C';
-    if (score >= 60) return 'D';
+    if (score >= 85) return 'A';
+    if (score >= 70) return 'B';
+    if (score >= 60) return 'C';
+    if (score >= PASS_THRESHOLD) return 'D';
     return 'F';
   }
 
@@ -266,10 +266,10 @@
         input.style.borderColor = '#dc2626';
       } else {
         weighted += val * SCORE_WEIGHTS[col];
-        if      (val >= 90) { input.style.borderColor = '#16a34a'; }
+        if      (val >= 85) { input.style.borderColor = '#16a34a'; }
         else if (val >= 70) { input.style.borderColor = '#2563eb'; }
-        else if (val >= 60) { input.style.borderColor = '#d97706'; }
-        else                { input.style.borderColor = '#dc2626'; }
+        else if (val >= PASS_THRESHOLD) { input.style.borderColor = '#d97706'; }
+        else                            { input.style.borderColor = '#dc2626'; }
       }
     });
 
