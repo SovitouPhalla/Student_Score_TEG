@@ -201,7 +201,7 @@
               <span class="yearly-avg-score">{{ "%.2f"|format(ytd_avg) }}</span>
               <span class="yearly-avg-denom">/ 100</span>
               <span class="badge-inline {{ 'badge-inline-pass' if ytd_passed else 'badge-inline-fail' }}">
-                {{ 'PASSING' if ytd_passed else 'FAILING' }}
+                {{ _('PASSING') if ytd_passed else _('FAILING') }}
               </span>
               <span class="yearly-avg-note">
                 ({{ all_terms.values() | select | list | length }} of {{ valid_terms | list | length }} terms released)

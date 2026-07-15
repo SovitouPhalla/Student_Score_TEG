@@ -40,7 +40,7 @@ from flask import (
     session,
     flash,
 )
-from flask_babel import Babel, gettext as _
+from translations import TRANSLATIONS
 
 # ── App setup ──────────────────────────────────────────────────────────────────
 app = Flask(__name__)
@@ -51,20 +51,42 @@ app = Flask(__name__)
 # Generate a good value once with: python -c "import secrets; print(secrets.token_hex(32))"
 app.secret_key = os.environ.get("SECRET_KEY", "change-me-before-deploying")
 
-# ── Babel / i18n setup ─────────────────────────────────────────────────────────
-LANGUAGES = ["en", "km"]
-app.config["BABEL_DEFAULT_LOCALE"]    = "en"
-app.config["BABEL_DEFAULT_TIMEZONE"]  = "Asia/Phnom_Penh"
-app.config["BABEL_TRANSLATION_DIRECTORIES"] = "translations"
+# ── i18n: dict-based translation system ───────────────────────────────────────
+SUPPORTED_LANGUAGES = ("en", "km")
 
 
-def get_locale():
-    """Return the active locale from the session, defaulting to English."""
+@app.context_processor
+def inject_translator():
+    """
+    Inject a ``_()`` helper into every Jinja2 template.
+
+    Usage in templates:
+        {{ _('Student Name') }}
+        {{ _('Passing threshold: %(pct)s%%', pct=threshold|int) }}
+
+    Behaviour:
+    - Looks up the current session language (default 'en').
+    - Falls back to the English entry if the key is missing in 'km'.
+    - Falls back to the raw key string if the key is absent from both locales.
+    - Supports printf-style named placeholders via **kwargs
+      (e.g. %(pct)s → str(pct)), matching Babel's gettext signature.
+    """
     lang = session.get("language", "en")
-    return lang if lang in LANGUAGES else "en"
+    if lang not in SUPPORTED_LANGUAGES:
+        lang = "en"
+    locale_dict = TRANSLATIONS.get(lang, TRANSLATIONS["en"])
+    en_dict     = TRANSLATIONS["en"]
 
+    def _(key: str, **kwargs) -> str:
+        text = locale_dict.get(key) or en_dict.get(key) or key
+        if kwargs:
+            try:
+                return text % kwargs
+            except (KeyError, TypeError, ValueError):
+                return text
+        return text
 
-babel = Babel(app, locale_selector=get_locale)
+    return {"_": _}
 
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 EXCEL_PATH = os.path.join(BASE_DIR, "grades.xlsx")
@@ -1410,6 +1432,55 @@ def admin_logout():
     return redirect(url_for("admin_login"))
 
 
+# ── Admin: helpers ───────────────────────────────────────────────────────────
+
+def _admin_load(dept: str):
+    """
+    Load student and grade data for admin CRUD, normalised to EN column names.
+
+    Both departments are exposed to the admin layer with the same column set:
+      StudentID | Name | ClassLabel | ParentPassword
+
+    For CN, the raw sheet columns (No, Class, Password) are renamed on load
+    and renamed back inside the returned save_fn before writing, so all four
+    CRUD routes remain completely dept-agnostic.
+
+    Returns
+    -------
+    students_df   : DataFrame with normalised column names
+    grades_df     : Raw grades DataFrame (columns untouched)
+    grades_id_col : 'StudentID' for EN, 'No' for CN — used when propagating
+                    ID changes or cascading deletions into the Grades sheet
+    save_fn       : Callable(students_df, grades_df) that persists both sheets
+
+    Raises FileNotFoundError / OSError on data access failure.
+    """
+    if dept == "cn":
+        raw, grades_df = load_cn_sheets()
+        students_df = raw.rename(columns={
+            "No": "StudentID", "Class": "ClassLabel", "Password": "ParentPassword"
+        }).copy()
+        grades_id_col = "No"
+
+        def _save_cn(s, g):
+            s_out = s.rename(columns={
+                "StudentID": "No", "ClassLabel": "Class", "ParentPassword": "Password"
+            })
+            save_cn_sheets(s_out, g)
+
+        return students_df, grades_df, grades_id_col, _save_cn
+
+    # English department (default)
+    students_df, grades_df = load_sheets()
+    return students_df, grades_df, "StudentID", save_sheets
+
+
+def _admin_dept(source) -> str:
+    """Extract and validate 'dept' from request.args or request.form."""
+    raw = source.get("dept", "en").strip().lower()
+    return raw if raw in ("en", "cn") else "en"
+
+
 # ── Admin: dashboard (roster + filter + search + inline edit form) ─────────────
 
 @app.route("/admin/dashboard")
@@ -1418,8 +1489,10 @@ def admin_dashboard():
     if guard:
         return guard
 
+    dept = _admin_dept(request.args)
+
     try:
-        students_df, _ = load_sheets()
+        students_df, _, _, _ = _admin_load(dept)
     except (FileNotFoundError, OSError) as exc:
         flash(str(exc), "error")
         return redirect(url_for("admin_login"))
@@ -1430,7 +1503,7 @@ def admin_dashboard():
 
     class_labels = get_class_labels(students_df)
 
-    # Attach integer row index for CRUD operations (handles blank StudentIDs)
+    # Attach integer row index for CRUD operations (handles blank IDs)
     df = students_df.copy()
     df["_row_idx"] = df.index
 
@@ -1451,10 +1524,10 @@ def admin_dashboard():
             if ridx in students_df.index:
                 row = students_df.loc[ridx].fillna("")
                 edit_student = {
-                    "_row_idx":      ridx,
-                    "StudentID":     str(row["StudentID"]),
-                    "Name":          str(row["Name"]),
-                    "ClassLabel":    str(row["ClassLabel"]),
+                    "_row_idx":       ridx,
+                    "StudentID":      str(row["StudentID"]),
+                    "Name":           str(row["Name"]),
+                    "ClassLabel":     str(row["ClassLabel"]),
                     "ParentPassword": str(row["ParentPassword"]),
                 }
         except (ValueError, KeyError):
@@ -1469,6 +1542,7 @@ def admin_dashboard():
         edit_student = edit_student,
         total        = len(students_df),
         filtered     = len(students),
+        dept         = dept,
     )
 
 
@@ -1480,55 +1554,56 @@ def admin_student_add():
     if guard:
         return guard
 
+    dept        = _admin_dept(request.form)
     student_id  = request.form.get("student_id",  "").strip()
     name        = request.form.get("name",         "").strip()
     class_label = request.form.get("class_label",  "").strip()
     password    = request.form.get("password",     "").strip()
-    # Preserve current filter for redirect
+    # Preserve current filter/search state for the redirect
     fc = request.form.get("filter_class", "")
     q  = request.form.get("q", "")
 
     if not name:
         flash("Name is required.", "error")
-        return redirect(url_for("admin_dashboard", filter_class=fc, q=q))
+        return redirect(url_for("admin_dashboard", dept=dept, filter_class=fc, q=q))
     if not class_label:
         flash("Class is required.", "error")
-        return redirect(url_for("admin_dashboard", filter_class=fc, q=q))
+        return redirect(url_for("admin_dashboard", dept=dept, filter_class=fc, q=q))
     if not password:
         flash("Password is required.", "error")
-        return redirect(url_for("admin_dashboard", filter_class=fc, q=q))
+        return redirect(url_for("admin_dashboard", dept=dept, filter_class=fc, q=q))
 
     try:
-        students_df, grades_df = load_sheets()
+        students_df, grades_df, _, save_fn = _admin_load(dept)
     except (FileNotFoundError, OSError) as exc:
         flash(str(exc), "error")
-        return redirect(url_for("admin_dashboard"))
+        return redirect(url_for("admin_dashboard", dept=dept))
 
-    # Duplicate StudentID check (only if ID was provided)
+    # Duplicate ID check (only when an ID was provided)
     if student_id:
         existing = students_df[
             students_df["StudentID"].astype(str).str.strip() == student_id
         ]
         if not existing.empty:
             flash(f'Student ID "{student_id}" already exists.', "error")
-            return redirect(url_for("admin_dashboard", filter_class=fc, q=q))
+            return redirect(url_for("admin_dashboard", dept=dept, filter_class=fc, q=q))
 
     new_row = pd.DataFrame([{
-        "StudentID":     student_id,
-        "Name":         name,
-        "ClassLabel":   class_label,
+        "StudentID":      student_id,
+        "Name":           name,
+        "ClassLabel":     class_label,
         "ParentPassword": password,
     }])
     students_df = pd.concat([students_df, new_row], ignore_index=True)
 
     try:
-        save_sheets(students_df, grades_df)
+        save_fn(students_df, grades_df)
     except OSError as exc:
         flash(str(exc), "error")
-        return redirect(url_for("admin_dashboard", filter_class=fc, q=q))
+        return redirect(url_for("admin_dashboard", dept=dept, filter_class=fc, q=q))
 
     flash(f'Student "{name}" added to {class_label}.', "success")
-    return redirect(url_for("admin_dashboard", filter_class=class_label))
+    return redirect(url_for("admin_dashboard", dept=dept, filter_class=class_label))
 
 
 # ── Admin: Edit student ────────────────────────────────────────────────────────
@@ -1539,11 +1614,13 @@ def admin_student_edit():
     if guard:
         return guard
 
+    dept = _admin_dept(request.form)
+
     try:
         row_idx = int(request.form.get("row_idx", ""))
     except (ValueError, TypeError):
         flash("Invalid student reference.", "error")
-        return redirect(url_for("admin_dashboard"))
+        return redirect(url_for("admin_dashboard", dept=dept))
 
     name        = request.form.get("name",        "").strip()
     class_label = request.form.get("class_label", "").strip()
@@ -1552,36 +1629,37 @@ def admin_student_edit():
 
     if not name:
         flash("Name is required.", "error")
-        return redirect(url_for("admin_dashboard", edit=row_idx))
+        return redirect(url_for("admin_dashboard", dept=dept, edit=row_idx))
     if not class_label:
         flash("Class is required.", "error")
-        return redirect(url_for("admin_dashboard", edit=row_idx))
+        return redirect(url_for("admin_dashboard", dept=dept, edit=row_idx))
     if not password:
         flash("Password is required.", "error")
-        return redirect(url_for("admin_dashboard", edit=row_idx))
+        return redirect(url_for("admin_dashboard", dept=dept, edit=row_idx))
 
     try:
-        students_df, grades_df = load_sheets()
+        students_df, grades_df, grades_id_col, save_fn = _admin_load(dept)
     except (FileNotFoundError, OSError) as exc:
         flash(str(exc), "error")
-        return redirect(url_for("admin_dashboard"))
+        return redirect(url_for("admin_dashboard", dept=dept))
 
     if row_idx not in students_df.index:
         flash("Student record not found.", "error")
-        return redirect(url_for("admin_dashboard"))
+        return redirect(url_for("admin_dashboard", dept=dept))
 
     old_id = str(students_df.at[row_idx, "StudentID"]).strip()
 
-    # If StudentID changed, propagate to Grades as well
+    # If the ID changed, propagate to the Grades sheet before saving.
+    # grades_id_col is 'StudentID' for EN, 'No' for CN.
     if student_id != old_id:
         if student_id:
             col    = students_df["StudentID"].astype(str).str.strip()
             others = col[students_df.index != row_idx]
             if student_id in others.values:
                 flash(f'Student ID "{student_id}" is already in use.', "error")
-                return redirect(url_for("admin_dashboard", edit=row_idx))
-        grades_mask = grades_df["StudentID"].astype(str).str.strip() == old_id
-        grades_df.loc[grades_mask, "StudentID"] = student_id
+                return redirect(url_for("admin_dashboard", dept=dept, edit=row_idx))
+        grades_mask = grades_df[grades_id_col].astype(str).str.strip() == old_id
+        grades_df.loc[grades_mask, grades_id_col] = student_id
         students_df.at[row_idx, "StudentID"] = student_id
 
     students_df.at[row_idx, "Name"]           = name
@@ -1589,13 +1667,13 @@ def admin_student_edit():
     students_df.at[row_idx, "ParentPassword"] = password
 
     try:
-        save_sheets(students_df, grades_df)
+        save_fn(students_df, grades_df)
     except OSError as exc:
         flash(str(exc), "error")
-        return redirect(url_for("admin_dashboard", edit=row_idx))
+        return redirect(url_for("admin_dashboard", dept=dept, edit=row_idx))
 
     flash(f'Student "{name}" updated.', "success")
-    return redirect(url_for("admin_dashboard", filter_class=class_label))
+    return redirect(url_for("admin_dashboard", dept=dept, filter_class=class_label))
 
 
 # ── Admin: Delete student ──────────────────────────────────────────────────────
@@ -1606,42 +1684,45 @@ def admin_student_delete():
     if guard:
         return guard
 
+    dept = _admin_dept(request.form)
+
     try:
         row_idx = int(request.form.get("row_idx", ""))
     except (ValueError, TypeError):
         flash("Invalid student reference.", "error")
-        return redirect(url_for("admin_dashboard"))
+        return redirect(url_for("admin_dashboard", dept=dept))
 
     try:
-        students_df, grades_df = load_sheets()
+        students_df, grades_df, grades_id_col, save_fn = _admin_load(dept)
     except (FileNotFoundError, OSError) as exc:
         flash(str(exc), "error")
-        return redirect(url_for("admin_dashboard"))
+        return redirect(url_for("admin_dashboard", dept=dept))
 
     if row_idx not in students_df.index:
         flash("Student record not found.", "error")
-        return redirect(url_for("admin_dashboard"))
+        return redirect(url_for("admin_dashboard", dept=dept))
 
-    student_name    = str(students_df.at[row_idx, "Name"])
-    student_id_val  = str(students_df.at[row_idx, "StudentID"]).strip()
-    filter_class    = str(students_df.at[row_idx, "ClassLabel"])
+    student_name   = str(students_df.at[row_idx, "Name"])
+    student_id_val = str(students_df.at[row_idx, "StudentID"]).strip()
+    filter_class   = str(students_df.at[row_idx, "ClassLabel"])
 
-    # Remove from Students
+    # Remove from Students sheet
     students_df = students_df.drop(index=row_idx).reset_index(drop=True)
 
-    # Remove all grade rows for this student
-    if student_id_val:
-        grades_mask = grades_df["StudentID"].astype(str).str.strip() == student_id_val
+    # Cascade-delete all grade rows for this student.
+    # grades_id_col is 'StudentID' for EN, 'No' for CN.
+    if student_id_val and student_id_val != "nan":
+        grades_mask = grades_df[grades_id_col].astype(str).str.strip() == student_id_val
         grades_df   = grades_df[~grades_mask].reset_index(drop=True)
 
     try:
-        save_sheets(students_df, grades_df)
+        save_fn(students_df, grades_df)
     except OSError as exc:
         flash(str(exc), "error")
-        return redirect(url_for("admin_dashboard"))
+        return redirect(url_for("admin_dashboard", dept=dept))
 
     flash(f'Student "{student_name}" deleted.', "success")
-    return redirect(url_for("admin_dashboard", filter_class=filter_class))
+    return redirect(url_for("admin_dashboard", dept=dept, filter_class=filter_class))
 
 
 # ── Admin: Approval dashboard ──────────────────────────────────────────────────

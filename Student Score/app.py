@@ -130,6 +130,10 @@ def get_student_pass_threshold(student_info: dict | None) -> float:
 def get_student_valid_terms(student_info: dict | None):
     """Return the English term set for a student based on Level."""
     info = student_info or {}
+    # IELTS afternoon / evening classes always use 5 terms
+    class_label = str(info.get("ClassLabel") or "").strip().upper()
+    if class_label.startswith("IELTS"):
+        return EN_VALID_TERMS
     level_num = parse_level_number(info.get("Level"))
     if level_num is None:
         # Backward-compatible fallback: some workbooks encode level in ClassLabel (e.g. L1T2).
