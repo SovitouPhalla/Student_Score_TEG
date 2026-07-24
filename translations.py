@@ -149,9 +149,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     # ──────────────────────────────────────────────────────────────────────────
     "km": {
         # ── Navigation ────────────────────────────────────────────────────────
-        "Departments":                   "នាយកដ្ឋាន",
-        "Teacher Portal":                "ច្រកទ្វារគ្រូ",
-        "Admin":                         "អ្នកគ្រប់គ្រង",
+        "Departments":                   "កម្មវិធីសិក្សា",
+        "Teacher Portal":                "សម្រាប់គ្រូ",
+        "Admin":                         "រដ្ធបាល",
         "HOD Approvals":                 "ការអនុម័តប្រធានផ្នែក",
         "Teacher Logout":                "ចាកចេញ (គ្រូ)",
         "Admin Logout":                  "ចាកចេញ (អ្នកគ្រប់គ្រង)",
@@ -163,17 +163,17 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
 
         # ── Landing page ──────────────────────────────────────────────────────
         "Welcome to the Student Report Portal":
-            "សូមស្វាគមន៍មកកាន់ប្រព័ន្ធរបាយការណ៍លទ្ធផលសិស្ស",
+            "សូមស្វាគមន៍មកកាន់គេហទំព័ររបាយការណ៍សិស្សានុសិស្ស",
         "Select your department below to view a term report card.":
-            "សូមជ្រើសរើសនាយកដ្ឋានខាងក្រោម ដើម្បីមើលលទ្ធផលសិក្សា",
-        "English Department":            "នាយកដ្ឋានភាសាអង់គ្លេស",
-        "Chinese Department":            "នាយកដ្ឋានភាសាចិន",
+            "សូមជ្រើសរើសកម្មវិធីសិក្សាដូចខាងក្រោម ដើម្បីមើលលទ្ធផលសិក្សា",
+        "English Department":            "ថ្នាក់សិក្សាភាសាអង់គ្លេស",
+        "Chinese Department":            "ថ្នាក់សិក្សាភាសាចិន",
 
         # ── Login ─────────────────────────────────────────────────────────────
         "Parent / Guardian Login":       "ការចូលជំពូករបស់មាតា-បិតា / អ្នកអាណាព្យាបាល",
-        "Chinese Department Login":      "ការចូលជំពូកនាយកដ្ឋានចិន",
+        "Chinese Department Login":      "ការចូលជំពូកថ្នាក់ភាសាចិន",
         "Enter your child's full name and the password provided by the school.":
-            "បំពេញឈ្មោះពេញរបស់កូន និងលេខសំងាត់ដែលផ្តល់ដោយសាលា",
+            "បំពេញឈ្មោះពេញរបស់កូន និងលេខសំងាត់ដែលបានផ្តល់ដោយសាលា",
         "Student Full Name":             "ឈ្មោះពេញរបស់សិស្ស",
         "Child's Class (to clarify)":    "ថ្នាក់របស់កូន (ដើម្បីបញ្ជាក់)",
         "— Select Class —":              "— ជ្រើសរើសថ្នាក់ —",
@@ -184,57 +184,56 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Parent Password":               "លេខសំងាត់មាតា-បិតា",
         "Enter password":                "វាយបញ្ចូលលេខសំងាត់",
         "View Report Card":              "មើលក្រដាសលទ្ធផល",
-        "Wrong department?":             "ខុសនាយកដ្ឋានមែនទែ?",
+        "Wrong department?":             "ខុសថ្នាក់សិក្សាមែនទែ?",
 
         # ── Report card — school header ───────────────────────────────────────
         "Official Term Report Card":     "ក្រដាសលទ្ធផលសិក្សាផ្លូវការ",
         "Academic Year 2024 \u2013 2025":
             "ឆ្នាំសិក្សា ២០២៤ \u2013 ២០២៥",
         "Chinese Department \u2013 Official Term Report Card":
-            "នាយកដ្ឋានចិន \u2013 ក្រដាសលទ្ធផលសិក្សាផ្លូវការ",
+            "ថ្នាក់សិក្សាភាសាចិន \u2013 ក្រដាសលទ្ធផលសិក្សាផ្លូវការ",
         "CN Program \u2022 Academic Year 2024 \u2013 2025":
             "កម្មវិធី CN \u2022 ឆ្នាំសិក្សា ២០២៤ \u2013 ២០២៥",
 
         # ── Report card — student meta block ─────────────────────────────────
         "Student Name":                  "ឈ្មោះសិស្ស",
-        "Student ID":                    "លេខសម្គាល់សិស្ស",
+        "Student ID":                    "អត្តលេខសិស្ស",
         "No. in List":                   "លេខក្នុងបញ្ជី",
-        "Class":                         "ថ្នាក់",
-        "Department":                    "នាយកដ្ឋាន",
+        "Class":                         "កម្រិតថ្នាក់/វេនសិក្សា",
+        "Department":                    "ថ្នាក់សិក្សា",
         "Chinese (CN Program)":          "ភាសាចិន (កម្មវិធី CN)",
-        "Report Generated":              "ថ្ងៃបង្កើតរបាយការណ៍",
-        "Terms Released":                "ក្រតាដែលចេញផ្សាយ",
+        "Report Generated":              "កាលបរិច្ឆេទ",
 
         # ── Report card — term selector ───────────────────────────────────────
-        "View Term":                     "មើលក្រតា",
+        "View Term":                     "ជ្រេីសរើសវគ្គសិក្សា",
         "Master Overview (All Terms)":   "ទិដ្ឋភាពសរុប (គ្រប់ក្រតា)",
 
         # ── Report card — score table ─────────────────────────────────────────
         "All-Term Score Breakdown":      "សង្ខេបពិន្ទុគ្រប់ក្រតា",
-        "Category":                      "ប្រភេទ",
-        "Weight":                        "ទម្ងន់",
-        "Released":                      "ចេញផ្សាយ",
-        "Pending":                       "កំពុងរង់ចាំ",
+        "Category":                      "រាយមុខវិជ្ជា",
+        "Weight":                        "ពិន្ទុសរុប",
+        "Released":                      "មានរបាយការណ៍",
+        "Pending":                       "មិនទាន់មានរបាយការណ៍",
         "Not Yet Released":              "មិនទាន់ចេញផ្សាយ",
         "Score / 100":                   "ពិន្ទុ / ១០០",
-        "Grade":                         "ថ្នាក់",
+        "Grade":                         "និទ្ទេស",
         "Contribution":                  "ការចូលរួម",
 
         # ── English department score columns ──────────────────────────────────
-        "Conduct":                       "ការប្រព្រឹត្ត",
+        "Conduct":                       "ឥរិយាបថ",
         "Class Participation":           "ការចូលរួមក្នុងថ្នាក់",
-        "Homework & Assignments":        "កិច្ចការផ្ទះ និងកិច្ចការប្រគល់",
-        "Quiz":                          "ប្រឡងខ្លី",
-        "Mid-Term Exam":                 "ការប្រឡងពាក់កណ្ដាលឆមាស",
-        "Final Exam":                    "ការប្រឡងចុងឆមាស",
-        "Final Report":                  "លទ្ធផលចុងក្រោយ",
-        "Final Report Score":            "ពិន្ទុលទ្ធផលចុងក្រោយ",
+        "Homework & Assignments":        "កិច្ចការផ្ទះ និងកិច្ចការក្នុងថ្នាក់",
+        "Quiz":                          "កិច្ចការសាលា",
+        "Mid-Term Exam":                 "ការប្រឡងពាក់កណ្ដាលវគ្គសិក្សា",
+        "Final Exam":                    "ការប្រឡងបញ្ចប់វគ្គសិក្សា",
+        "Final Report":                  "លទ្ធផលសរុប",
+        "Final Report Score":            "ពិន្ទុលទ្ធផលសរុប",
 
         # ── Chinese department score columns ──────────────────────────────────
         "Behavior":                      "ឥរិយាបថ",
         "Homework":                      "កិច្ចការផ្ទះ",
-        "Quizzes":                       "ប្រឡងខ្លី",
-        "Final Test":                    "ការប្រឡងចុងក្រោយ",
+        "Quizzes":                       "កិច្ចការសាលា",
+        "Final Test":                    "ការប្រឡងបញ្ចប់វគ្គសិក្សា",
 
         # ── Chinese grading scale ─────────────────────────────────────────────
         "Grading Scale":                 "មាត្រដ្ឋានការវាយតម្លៃ",
@@ -245,7 +244,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Failure":                       "ធ្លាក់",
 
         # ── Status / pass-fail labels ─────────────────────────────────────────
-        "Status":                        "ស្ថានភាព",
+        "Status":                        "និទ្ទេស",
         "PASSED":                        "ជាប់",
         "FAILED":                        "ធ្លាក់",
         "PASSING":                       "កំពុងជាប់",

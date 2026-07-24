@@ -134,6 +134,12 @@ def get_student_valid_terms(student_info: dict | None):
     class_label = str(info.get("ClassLabel") or "").strip().upper()
     if class_label.startswith("IELTS"):
         return EN_VALID_TERMS
+    # Specific afternoon classes use a 5-term schedule
+    # e.g. 'L8 Afternoon', 'L7 Afternoon', 'L5 Afternoon'
+    if "AFTER" in class_label:
+        level_num_cl = parse_level_number(class_label)
+        if level_num_cl in (5, 7, 8):
+            return EN_VALID_TERMS
     level_num = parse_level_number(info.get("Level"))
     if level_num is None:
         # Backward-compatible fallback: some workbooks encode level in ClassLabel (e.g. L1T2).
