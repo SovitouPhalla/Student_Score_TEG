@@ -246,7 +246,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Failure":                       "ធ្លាក់",
 
         # ── Status / pass-fail labels ─────────────────────────────────────────
-        "Status":                        "និទ្ទេស",
+        "Status":                        "ស្ថានភាព",
         "PASSED":                        "ជាប់",
         "FAILED":                        "ធ្លាក់",
         "PASSING":                       "កំពុងជាប់",

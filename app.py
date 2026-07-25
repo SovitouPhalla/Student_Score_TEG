@@ -539,6 +539,17 @@ def get_all_terms(grades_df: pd.DataFrame, student_id: str) -> dict:
     return {t: get_student_term(grades_df, student_id, t) for t in VALID_TERMS}
 
 
+def get_latest_released_term(all_terms: dict, valid_terms):
+    """
+    Return the highest term number that has released (non-None) data.
+    Falls back to the first valid term if nothing has been released yet.
+    """
+    released = [t for t in valid_terms if all_terms.get(t) is not None]
+    if released:
+        return max(released)
+    return valid_terms[0]
+
+
 @app.route("/debug/check-teacher", methods=["GET"])
 def debug_check_teacher():
     """Debug endpoint - show teachers data."""
@@ -571,7 +582,7 @@ def test_session():
 @app.route("/set_language/<lang>")
 def set_language(lang):
     """Set the UI language and redirect back to the referring page."""
-    if lang in LANGUAGES:
+    if lang in SUPPORTED_LANGUAGES:
         session["language"] = lang
     referrer = request.referrer or url_for("index")
     return redirect(referrer)
@@ -711,6 +722,7 @@ def report():
         ytd_passed   = ytd_passed,
         threshold    = PASS_THRESHOLD,
         valid_terms  = VALID_TERMS,
+        default_term = get_latest_released_term(all_terms, VALID_TERMS),
     )
 
 
@@ -956,6 +968,7 @@ def hod_student_preview(student_id):
         ytd_passed       = ytd_passed,
         threshold        = PASS_THRESHOLD,
         valid_terms      = VALID_TERMS,
+        default_term     = get_latest_released_term(all_terms, VALID_TERMS),
         preview_mode     = True,
         hod_preview      = True,
     )
@@ -1783,6 +1796,7 @@ def admin_student_preview(student_id):
         ytd_passed    = ytd_passed,
         threshold     = PASS_THRESHOLD,
         valid_terms   = VALID_TERMS,
+        default_term  = get_latest_released_term(all_terms, VALID_TERMS),
         preview_mode  = True,
     )
 

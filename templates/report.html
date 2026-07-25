@@ -92,7 +92,7 @@
     <label class="term-view-label" for="term-selector">{{ _('View Term') }}</label>
     <select id="term-selector" class="term-view-select" onchange="switchView(this.value)">
       {% for t in valid_terms %}
-      <option value="{{ t }}">
+      <option value="{{ t }}" {% if t == default_term %}selected{% endif %}>
         Term {{ t }}{% if all_terms[t] %} — Released ✔{% else %} — Pending{% endif %}
       </option>
       {% endfor %}
@@ -246,7 +246,7 @@
     });
   }
 
-  switchView(VALID_TERMS[0]);
+  switchView("{{ default_term }}");
 </script>
 
 {% endblock %}
