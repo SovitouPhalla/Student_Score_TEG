@@ -163,13 +163,14 @@
           {% endif %}
         </tr>
         <tr class="status-row">
-          <td colspan="2"><strong>{{ _('Status') }}</strong></td>
+          <td colspan="2"><strong>{{ _('Grade') }}</strong></td>
           {% if all_terms[t] %}
             {% set fr_s = all_terms[t].FinalReport | float %}
+            {% set lg_s = en_letter_grade(fr_s) %}
             {% if fr_s >= threshold %}
-              <td class="status-cell status-pass-cell td-ctr">✔ {{ _('PASSED') }}</td>
+              <td class="status-cell status-pass-cell td-ctr">✔ {{ _('PASSED') }} ({{ lg_s }})</td>
             {% else %}
-              <td class="status-cell status-fail-cell td-ctr">✘ {{ _('FAILED') }}</td>
+              <td class="status-cell status-fail-cell td-ctr">✘ {{ _('FAILED') }} ({{ lg_s }})</td>
             {% endif %}
           {% else %}
             <td class="nyr-cell td-ctr">{{ _('Not Yet Released') }}</td>

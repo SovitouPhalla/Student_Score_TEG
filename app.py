@@ -107,6 +107,25 @@ SCORE_WEIGHTS = {
 VALID_TERMS    = (1, 2, 3, 4)
 PASS_THRESHOLD = 50.0
 
+
+def en_letter_grade(score: float) -> str:
+    """
+    Return the letter grade for an English-department Final Report score.
+    A: 85-100 | B: 70-84 | C: 60-69 | D: PASS_THRESHOLD-59 | F: below PASS_THRESHOLD
+    """
+    if score >= 85:
+        return "A"
+    if score >= 70:
+        return "B"
+    if score >= 60:
+        return "C"
+    if score >= PASS_THRESHOLD:
+        return "D"
+    return "F"
+
+
+app.jinja_env.globals["en_letter_grade"] = en_letter_grade
+
 # ── Chinese Department constants ──────────────────────────────────────────────
 CN_EXCEL_PATH    = os.path.join(BASE_DIR, "chinese_grades.xlsx")
 CN_SCORE_COLS    = ["Behavior", "CP", "Homework", "Quiz", "FinalTest"]
