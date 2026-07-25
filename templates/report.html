@@ -130,18 +130,17 @@
         <tr>
           <th>{{ _('Category') }}</th>
           <th class="td-ctr">{{ _('Weight') }}</th>
-          <th class="td-ctr">{{ _('Contribution') }}</th>
+          <th class="td-ctr">{{ _('Scores') }}</th>
         </tr>
       </thead>
       <tbody>
         {% for col in score_cols %}
           {% if all_terms[t] %}
             {% set s = all_terms[t][col] | float %}
-            {% set w = score_weights[col] %}
             <tr>
               <td class="cat-name">{{ col_friendly[col] }}</td>
               <td class="td-ctr cat-weight">{{ weight_pct[col] }}</td>
-              <td class="td-ctr cat-weight">{{ "%.2f"|format(s * w) }}</td>
+              <td class="td-ctr cat-weight">{{ "%.2f"|format(s) }}</td>
             </tr>
           {% else %}
             <tr>

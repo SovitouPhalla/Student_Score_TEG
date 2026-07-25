@@ -88,6 +88,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Not Yet Released":              "Not Yet Released",
         "Score / 100":                   "Score / 100",
         "Grade":                         "Grade",
+        "Scores":                        "Scores",
         "Contribution":                  "Contribution",
 
         # ── English department score columns ──────────────────────────────────
@@ -217,6 +218,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Not Yet Released":              "មិនទាន់ចេញផ្សាយ",
         "Score / 100":                   "ពិន្ទុ / ១០០",
         "Grade":                         "និទ្ទេស",
+        "Scores":                        "ពិន្ទុ",
         "Contribution":                  "ការចូលរួម",
 
         # ── English department score columns ──────────────────────────────────

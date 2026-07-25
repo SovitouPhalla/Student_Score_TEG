@@ -366,9 +366,8 @@
         <tr>
           <th>{{ _('Category') }}</th>
           <th class="td-ctr">{{ _('Weight') }}</th>
-          <th class="td-ctr">{{ _('Score / 100') }}</th>
+          <th class="td-ctr">{{ _('Scores') }}</th>
           <th class="td-ctr">{{ _('Grade') }}</th>
-          <th class="td-ctr">{{ _('Contribution') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -379,11 +378,10 @@
               <tr>
                 <td class="cat-name">{{ col_friendly[col] }}</td>
                 <td class="td-ctr cat-weight">{{ weight_pct[col] }}</td>
-                <td class="nyr-cell td-ctr cn-special-status" colspan="3">{{ status_val }}</td>
+                <td class="nyr-cell td-ctr cn-special-status" colspan="2">{{ status_val }}</td>
               </tr>
             {% else %}
               {% set s = all_terms[t][col] | float %}
-              {% set w = score_weights[col] %}
               {% set lg = letter_grade(s) | trim %}
               <tr>
                 <td class="cat-name">{{ col_friendly[col] }}</td>
@@ -392,14 +390,13 @@
                 <td class="td-ctr">
                   <span class="grade-badge grade-{{ lg }}">{{ lg }}</span>
                 </td>
-                <td class="td-ctr cat-weight">{{ "%.2f"|format(s * w) }}</td>
               </tr>
             {% endif %}
           {% else %}
             <tr>
               <td class="cat-name">{{ col_friendly[col] }}</td>
               <td class="td-ctr cat-weight">{{ weight_pct[col] }}</td>
-              <td class="nyr-cell td-ctr" colspan="3">{{ _('Not Yet Released') }}</td>
+              <td class="nyr-cell td-ctr" colspan="2">{{ _('Not Yet Released') }}</td>
             </tr>
           {% endif %}
         {% endfor %}
@@ -410,14 +407,14 @@
           {% if all_terms[t] %}
             {% set status_val = all_terms[t].get('Status', '') | string | upper | trim %}
             {% if status_val in ('WF', 'AU') %}
-              <td class="nyr-cell td-ctr cn-special-status" colspan="3">{{ status_val }}</td>
+              <td class="nyr-cell td-ctr cn-special-status" colspan="2">{{ status_val }}</td>
             {% else %}
-              <td class="td-ctr score-final" colspan="3">
+              <td class="td-ctr score-final" colspan="2">
                 {{ "%.2f"|format(all_terms[t].TotalGrade | float) }} / 100
               </td>
             {% endif %}
           {% else %}
-            <td class="nyr-cell td-ctr" colspan="3">{{ _('Not Yet Released') }}</td>
+            <td class="nyr-cell td-ctr" colspan="2">{{ _('Not Yet Released') }}</td>
           {% endif %}
         </tr>
 
@@ -428,7 +425,7 @@
             {% set lg = letter_grade(tg) | trim %}
         <tr>
           <td colspan="2"><strong>Letter Grade &amp; Description</strong></td>
-          <td class="td-ctr" colspan="3">
+          <td class="td-ctr" colspan="2">
             <span class="grade-badge grade-{{ lg }}">{{ lg }}</span>
             <span class="cn-grade-desc" style="margin-left:.5rem;">
               {{ grade_label(tg) | trim }}
@@ -437,7 +434,7 @@
         </tr>
         <tr>
           <td colspan="2"><strong>Grade Point</strong></td>
-          <td class="td-ctr cat-weight" colspan="3">{{ gp_range(tg) | trim }}</td>
+          <td class="td-ctr cat-weight" colspan="2">{{ gp_range(tg) | trim }}</td>
         </tr>
           {% endif %}
         {% endif %}
@@ -447,25 +444,25 @@
           {% if all_terms[t] %}
             {% set status_val = all_terms[t].get('Status', '') | string | upper | trim %}
             {% if status_val == 'WF' %}
-              <td class="status-cell td-ctr" colspan="3"
+              <td class="status-cell td-ctr" colspan="2"
                   style="background:#fef9c3;color:#854d0e;">
                 Withdrawal without Failure (WF)
               </td>
             {% elif status_val == 'AU' %}
-              <td class="status-cell td-ctr" colspan="3"
+              <td class="status-cell td-ctr" colspan="2"
                   style="background:#f0f9ff;color:#0369a1;">
                 Audit (AU) â€” No grade assigned
               </td>
             {% else %}
               {% set tg = all_terms[t].TotalGrade | float %}
               {% if tg >= threshold %}
-                <td class="status-cell status-pass-cell td-ctr" colspan="3">âœ” {{ _('PASSED') }}</td>
+                <td class="status-cell status-pass-cell td-ctr" colspan="2">✔ {{ _('PASSED') }}</td>
               {% else %}
-                <td class="status-cell status-fail-cell td-ctr" colspan="3">âœ˜ {{ _('FAILED') }}</td>
+                <td class="status-cell status-fail-cell td-ctr" colspan="2">✘ {{ _('FAILED') }}</td>
               {% endif %}
             {% endif %}
           {% else %}
-            <td class="nyr-cell td-ctr" colspan="3">{{ _('Not Yet Released') }}</td>
+            <td class="nyr-cell td-ctr" colspan="2">{{ _('Not Yet Released') }}</td>
           {% endif %}
         </tr>
       </tfoot>
