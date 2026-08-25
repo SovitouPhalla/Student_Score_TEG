@@ -27,7 +27,7 @@
     <div class="teacher-status-note">{{ item.note }}</div>
     {% endif %}
     <div class="teacher-status-action">
-      <a href="{{ url_for('update', class_label=item.class_label) }}"
+      <a href="{{ url_for('update', class_label=item.class_label, term=item.term) }}"
          class="btn btn-xs btn-danger">
         Go to Scores ›
       </a>
@@ -38,328 +38,196 @@
 {% endif %}
 
 <!-- ══════════════════════════════════════════════════════════
-     PHASE INDICATOR
+     CLASS + TERM SELECTOR
      ══════════════════════════════════════════════════════════ -->
-<div class="phase-bar">
-  <div class="phase-step {{ 'phase-active' if not student else 'phase-done' }}">
-    <span class="phase-num">1</span>
-    <span class="phase-label">Search Student</span>
-  </div>
-  <div class="phase-connector"></div>
-  <div class="phase-step {{ 'phase-active' if student else '' }}">
-    <span class="phase-num">2</span>
-    <span class="phase-label">Enter Scores</span>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════════════════════════
-     PHASE 1 – SEARCH FORM
-     Always visible — teacher can switch student/term freely.
-     ══════════════════════════════════════════════════════════ -->
-<div class="card {{ 'card-narrow' if not student else '' }}">
+<div class="card">
   <div class="card-header">
     <h1>Teacher Portal</h1>
     <p class="card-subtitle">
-      Select a Class, then a Student, then a Term to load or create a term record.
+      Select a Class and Term to grade the whole class in one pass.
     </p>
   </div>
 
-  <form method="POST" action="{{ url_for('update_search') }}" novalidate>
+  <form method="GET" action="{{ url_for('update') }}" class="apv-selector-form">
     <div class="search-row">
-
-      {# ── Class Label selector ────────────────────────────────────────── #}
       <div class="form-group search-field-class">
-        <label for="class_label">Class</label>
-        <select id="class_label" name="class_label" required onchange="filterStudents()">
+        <label for="sel-class">Class</label>
+        <select id="sel-class" name="class_label" required>
           <option value="">— Select Class —</option>
           {% for lbl in class_labels %}
-          <option
-            value="{{ lbl }}"
-            {{ 'selected' if class_label == lbl or (student and student.ClassLabel == lbl) else '' }}
-          >{{ lbl }}</option>
+          <option value="{{ lbl }}" {{ 'selected' if class_label == lbl else '' }}>{{ lbl }}</option>
           {% endfor %}
         </select>
       </div>
-
-      {# ── Student selector (filtered by JS) ──────────────────────────── #}
-      <div class="form-group search-field-student">
-        <label for="student_id">Student</label>
-        <select id="student_id" name="student_id" required>
-          <option value="">— Select Student —</option>
-          {# Options populated/filtered by filterStudents() on page load #}
-        </select>
-      </div>
-
-      {# ── Term selector ──────────────────────────────────────────────── #}
       <div class="form-group search-field-term">
-        <label for="term">Term</label>
-        <select id="term" name="term" required>
+        <label for="sel-term">Term</label>
+        <select id="sel-term" name="term" required>
+          <option value="">— Select Term —</option>
           {% for t in valid_terms %}
-          <option
-            value="{{ t }}"
-            {{ 'selected' if (term and term == t) or (student and student.Term == t) else '' }}
-          >Term {{ t }}</option>
+          <option value="{{ t }}" {{ 'selected' if term == t else '' }}>Term {{ t }}</option>
           {% endfor %}
         </select>
       </div>
-
       <div class="form-group search-btn-wrap">
         <label>&nbsp;</label>
-        <button type="submit" class="btn btn-secondary">Search</button>
+        <button type="submit" class="btn btn-secondary">View Class</button>
       </div>
-
     </div>
   </form>
-
-  <!-- ── Confirmation banner: visible after a successful search ─── -->
-  {% if student %}
-  <div class="confirm-banner">
-    <div class="confirm-icon">✔</div>
-    <div class="confirm-text">
-      <span class="confirm-name">{{ student.Name }}</span>
-      <span class="confirm-id">
-        ID: {{ student.StudentID }}
-        &nbsp;·&nbsp;
-        <span class="term-badge">{{ student.ClassLabel }}</span>
-        &nbsp;·&nbsp;
-        <span class="term-badge">Term {{ student.Term }}</span>
-        {% if student.get('_is_new_term') %}
-          <span class="new-term-badge">New Entry</span>
-        {% endif %}
-      </span>
-    </div>
-  </div>
-  {% endif %}
 </div>
 
 <!-- ══════════════════════════════════════════════════════════
-     PHASE 2 – SCORE ENTRY FORM
+     CLASS SCORE ENTRY TABLE
      ══════════════════════════════════════════════════════════ -->
-{% if student %}
+{% if class_label and term %}
 <div class="card" style="margin-top: 1.5rem;">
+
+  {% if not class_rows %}
+  <div class="admin-empty">
+    <p>No students found in {{ class_label }}.</p>
+  </div>
+  {% else %}
 
   <div class="card-header">
     <h2>
-      {% if student.get('_is_new_term') %}
-        Creating Term {{ student.Term }} Record — {{ student.Name }}
-      {% else %}
-        Editing Term {{ student.Term }} Scores — {{ student.Name }}
-      {% endif %}
+      <span class="class-tag">{{ class_label }}</span>
+      &mdash; Term {{ term }} &mdash; Enter Scores
     </h2>
     <p class="card-subtitle">
-      Each category carries an equal weight of <strong>20%</strong>.
-      The Final Report is recalculated automatically.
+      Each category is weighted as shown below. The Final Report for each
+      student is recalculated automatically as you type.
     </p>
   </div>
-
-  {% if student.get('_is_new_term') %}
-  <div class="new-term-notice">
-    ℹ No record exists for <strong>{{ student.Name }}</strong> in
-    <strong>Term {{ student.Term }}</strong> yet.
-    Saving will create a brand-new row for this term.
-  </div>
-  {% endif %}
 
   {# ── Calculation legend ──────────────────────────────────────────── #}
   <div class="calc-legend">
-    <span>FinalReport</span>
+    <span>Final Report</span>
     <span class="calc-eq">=</span>
-    <span>
-      (Conduct&times;5%) + (CP&times;5%) + (HW_ASS&times;15%) +
-      (QUIZ&times;15%) + (MidTerm&times;25%) + (Final&times;35%)
-    </span>
+    <span id="calc-legend-formula"></span>
   </div>
 
-  <form
-    id="score-form"
-    method="POST"
-    action="{{ url_for('update_save') }}"
-    novalidate
-  >
-    {# Hidden fields required for the save route #}
-    <input type="hidden" name="student_id"  value="{{ student.StudentID }}" />
-    <input type="hidden" name="term"        value="{{ student.Term }}" />
-    <input type="hidden" name="class_label" value="{{ student.ClassLabel }}" />
+  <p class="hint">
+    Leave a student's row blank to skip it for now — it can be graded later.
+    If you enter any score for a student, all of that student's columns are required.
+    Scores must be between <strong>0</strong> and <strong>100</strong> (step 0.1).
+  </p>
 
-    <div class="score-grid">
-      {% for col in score_cols %}
-      <div class="form-group">
-        <label for="{{ col }}">
-          {{ col }}
-          <span class="weight-badge">{{ (score_weights[col] * 100) | int }}%</span>
-        </label>
-        <input
-          type="number"
-          id="{{ col }}"
-          name="{{ col }}"
-          class="score-input"
-          min="0"
-          max="100"
-          step="0.1"
-          value="{{ student[col] }}"
-          placeholder="0 – 100"
-          required
-          oninput="recalcPreview()"
-        />
-      </div>
-      {% endfor %}
+  <form method="POST" action="{{ url_for('update_save_class') }}" id="class-score-form" novalidate>
+    <input type="hidden" name="class_label" value="{{ class_label }}" />
+    <input type="hidden" name="term"        value="{{ term }}" />
+
+    <div class="admin-table-wrap">
+      <table class="admin-table apv-student-table">
+        <thead>
+          <tr>
+            <th class="apv-name-col">Student</th>
+            {% for col in score_cols %}
+            <th class="apv-score-col">
+              {{ col }}<br><span class="apv-wt">{{ (score_weights[col] * 100) | int }}%</span>
+            </th>
+            {% endfor %}
+            <th class="apv-final-col">Final Report</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in class_rows %}
+          {% set ridx = loop.index %}
+          <tr>
+            <td class="apv-name-col">
+              <div class="apv-student-name">{{ row.name }}</div>
+              <div class="apv-student-id">{{ row.student_id or '—' }}</div>
+              {% if row.is_new %}<span class="new-term-badge">New</span>{% endif %}
+              <input type="hidden" name="student_ids" value="{{ row.student_id }}" />
+            </td>
+            {% for col in score_cols %}
+            <td class="apv-score-col">
+              <input
+                type="number"
+                name="{{ col }}[]"
+                class="score-input"
+                min="0" max="100" step="0.1"
+                value="{{ row.scores[col] }}"
+                placeholder="—"
+                data-row="{{ ridx }}"
+                data-col="{{ col }}"
+                oninput="recalcRow({{ ridx }})"
+              />
+            </td>
+            {% endfor %}
+            <td class="apv-final-col" id="live-final-{{ ridx }}">
+              {{ "%.2f"|format(row.final|float) if row.final != '' else '—' }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-
-    {# ── Live Final Report preview ────────────────────────────────── #}
-    <div class="final-preview" id="final-preview-box">
-      <div class="final-preview-inner">
-        <span class="final-label">Live Final Report Preview — Term {{ student.Term }}</span>
-        <span class="final-value" id="live-final">
-          {{ student.FinalReport if student.FinalReport != '' else '—' }}
-        </span>
-        <span class="letter-grade-badge" id="live-letter"></span>
-      </div>
-      <div class="final-bar-wrap">
-        <div class="final-bar" id="live-bar"></div>
-      </div>
-      <p class="final-status" id="live-status"></p>
-    </div>
-
-    <p class="hint">
-      Scores must be between <strong>0</strong> and <strong>100</strong> (step 0.1).
-      The preview updates as you type and is <em>not</em> saved until
-      you click "Save Scores".
-    </p>
 
     <div class="btn-row">
-      <a href="{{ url_for('update') }}" class="btn btn-outline">
-        ← Search Another Student
-      </a>
-      <button type="submit" class="btn btn-primary">
-        {{ 'Create Term ' ~ student.Term ~ ' Record' if student.get('_is_new_term') else 'Save Scores' }}
-      </button>
+      <button type="submit" class="btn btn-primary">Save All Scores</button>
     </div>
-
   </form>
+
+  {% endif %}
 </div>
-
-{# ══════════════════════════════════════════════════════════════════
-   Javascript: live FinalReport calculation + student dropdown filter
-   ══════════════════════════════════════════════════════════════════ #}
-<script>
-  const PASS_THRESHOLD = 60;
-  const SCORE_COLS     = {{ score_cols | tojson }};
-  const SCORE_WEIGHTS  = {{ score_weights | tojson }};
-
-  function getLetterGrade(score) {
-    if (score >= 90) return 'A';
-    if (score >= 80) return 'B';
-    if (score >= 70) return 'C';
-    if (score >= 60) return 'D';
-    return 'F';
-  }
-
-  function recalcPreview() {
-    let weighted = 0;
-    let valid    = true;
-
-    SCORE_COLS.forEach(function(col) {
-      const input  = document.getElementById(col);
-      const val    = parseFloat(input.value);
-      if (isNaN(val) || val < 0 || val > 100) {
-        valid = false;
-        input.style.borderColor = '#dc2626';
-      } else {
-        weighted += val * SCORE_WEIGHTS[col];
-        if      (val >= 90) { input.style.borderColor = '#16a34a'; }
-        else if (val >= 70) { input.style.borderColor = '#2563eb'; }
-        else if (val >= 60) { input.style.borderColor = '#d97706'; }
-        else                { input.style.borderColor = '#dc2626'; }
-      }
-    });
-
-    const finalEl  = document.getElementById('live-final');
-    const letterEl = document.getElementById('live-letter');
-    const barEl    = document.getElementById('live-bar');
-    const statusEl = document.getElementById('live-status');
-    const boxEl    = document.getElementById('final-preview-box');
-
-    if (!valid) {
-      finalEl.textContent  = '—';
-      letterEl.textContent = '';
-      letterEl.className   = 'letter-grade-badge';
-      barEl.style.width    = '0%';
-      statusEl.textContent = 'Fix invalid inputs above.';
-      boxEl.style.borderColor = '#94a3b8';
-      return;
-    }
-
-    const avg    = weighted.toFixed(2);
-    const letter = getLetterGrade(weighted);
-
-    finalEl.textContent  = avg;
-    letterEl.textContent = letter;
-    letterEl.className   = `letter-grade-badge grade-${letter}`;
-    barEl.style.width    = Math.min(weighted, 100) + '%';
-
-    if (weighted >= PASS_THRESHOLD) {
-      barEl.style.background  = '#16a34a';
-      statusEl.textContent    = `✔ Will PASS  (threshold: ${PASS_THRESHOLD})`;
-      statusEl.style.color    = '#166534';
-      boxEl.style.borderColor = '#16a34a';
-    } else {
-      barEl.style.background  = '#dc2626';
-      statusEl.textContent    = `✘ Will FAIL  (threshold: ${PASS_THRESHOLD})`;
-      statusEl.style.color    = '#991b1b';
-      boxEl.style.borderColor = '#dc2626';
-    }
-  }
-
-  document.addEventListener('DOMContentLoaded', recalcPreview);
-</script>
 {% endif %}
 
 {# ══════════════════════════════════════════════════════════════════
-   Javascript: ClassLabel → Student dropdown cascade
-   This script is always rendered (not inside {% if student %})
-   so the class dropdown works even before a student is loaded.
+   Javascript: per-row live Final Report calculation
    ══════════════════════════════════════════════════════════════════ #}
 <script>
-  // Embedded map: ClassLabel -> [{StudentID, Name}, ...]
-  // ClassLabel keys are treated as plain strings throughout.
-  const CLASS_STUDENTS = {{ class_students_map | tojson }};
+  const SCORE_COLS     = {{ score_cols | tojson }};
+  const SCORE_WEIGHTS  = {{ score_weights | tojson }};
+  const PASS_THRESHOLD = 60;
 
-  // Pre-selected values from server (used on page load)
-  const PRESELECTED_CLASS   = {{ (class_label or (student.ClassLabel if student else '')) | tojson }};
-  const PRESELECTED_STUDENT = {{ (student.StudentID if student else '') | tojson }};
-
-  function filterStudents() {
-    const classSelect   = document.getElementById('class_label');
-    const studentSelect = document.getElementById('student_id');
-    const selectedClass = classSelect.value;
-
-    // Clear existing options
-    studentSelect.innerHTML = '<option value="">— Select Student —</option>';
-
-    if (!selectedClass || !CLASS_STUDENTS[selectedClass]) {
-      return;
-    }
-
-    const students = CLASS_STUDENTS[selectedClass];
-    students.forEach(function(s) {
-      const opt    = document.createElement('option');
-      opt.value    = s.StudentID;
-      opt.textContent = s.Name + ' (' + s.StudentID + ')';
-      if (s.StudentID === PRESELECTED_STUDENT) {
-        opt.selected = true;
-      }
-      studentSelect.appendChild(opt);
-    });
-  }
-
-  // Run on page load to restore state after a search / PRG redirect
   document.addEventListener('DOMContentLoaded', function() {
-    const classSelect = document.getElementById('class_label');
-    if (PRESELECTED_CLASS) {
-      classSelect.value = PRESELECTED_CLASS;
+    const legend = document.getElementById('calc-legend-formula');
+    if (legend) {
+      legend.textContent = SCORE_COLS
+        .map(function(c) { return '(' + c + '\u00d7' + Math.round(SCORE_WEIGHTS[c] * 100) + '%)'; })
+        .join(' + ');
     }
-    filterStudents();
   });
+
+  function recalcRow(rowIdx) {
+    let weighted   = 0;
+    let anyFilled  = false;
+    let anyInvalid = false;
+
+    SCORE_COLS.forEach(function(col) {
+      const input = document.querySelector('input[data-row="' + rowIdx + '"][data-col="' + col + '"]');
+      if (!input) return;
+      const raw = input.value.trim();
+      if (raw === '') {
+        input.style.borderColor = '';
+        return;
+      }
+      anyFilled = true;
+      const val = parseFloat(raw);
+      if (isNaN(val) || val < 0 || val > 100) {
+        anyInvalid = true;
+        input.style.borderColor = '#dc2626';
+      } else {
+        input.style.borderColor = '#16a34a';
+        weighted += val * SCORE_WEIGHTS[col];
+      }
+    });
+
+    const finalCell = document.getElementById('live-final-' + rowIdx);
+    if (!finalCell) return;
+
+    if (!anyFilled) {
+      finalCell.textContent = '—';
+      finalCell.style.color = '';
+    } else if (anyInvalid) {
+      finalCell.textContent = '—';
+      finalCell.style.color = '#991b1b';
+    } else {
+      finalCell.textContent = weighted.toFixed(2);
+      finalCell.style.color = weighted >= PASS_THRESHOLD ? '#166534' : '#991b1b';
+    }
+  }
 </script>
 
 {% endblock %}
+

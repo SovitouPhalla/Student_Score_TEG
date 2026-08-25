@@ -62,27 +62,30 @@
   <hr class="report-divider" />
 
   <!-- ── Student info ───────────────────────────────────────────── -->
-  <div class="report-meta">
-    <div class="report-meta-item">
-      <span class="meta-label">{{ _('Student Name') }}</span>
-      <span class="meta-value">{{ student.Name }}</span>
+  <div class="report-meta-row">
+    <div class="report-meta">
+      <div class="report-meta-item">
+        <span class="meta-label">{{ _('Student Name') }}</span>
+        <span class="meta-value">{{ student.Name }}</span>
+      </div>
+      <div class="report-meta-item">
+        <span class="meta-label">{{ _('Student ID') }}</span>
+        <span class="meta-value">{{ student.StudentID if student.StudentID else '—' }}</span>
+      </div>
+      <div class="report-meta-item">
+        <span class="meta-label">{{ _('Class') }}</span>
+        <span class="meta-value">{{ student.ClassLabel }}</span>
+      </div>
+      <div class="report-meta-item">
+        <span class="meta-label">{{ _('Report Generated') }}</span>
+        <span class="meta-value">{{ report_generated }}</span>
+      </div>
     </div>
-    <div class="report-meta-item">
-      <span class="meta-label">{{ _('Student ID') }}</span>
-      <span class="meta-value">{{ student.StudentID if student.StudentID else '—' }}</span>
-    </div>
-    <div class="report-meta-item">
-      <span class="meta-label">{{ _('Class') }}</span>
-      <span class="meta-value">{{ student.ClassLabel }}</span>
-    </div>
-    <div class="report-meta-item">
-      <span class="meta-label">{{ _('Report Generated') }}</span>
-      <span class="meta-value" id="report-date"></span>
-      <script>
-        document.getElementById('report-date').textContent =
-          new Date().toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'});
-      </script>
-    </div>
+    {% if student_photo_url %}
+      <img src="{{ student_photo_url }}" alt="{{ student.Name }}" class="student-photo" />
+    {% else %}
+      <div class="student-photo student-photo-placeholder" aria-hidden="true">👤</div>
+    {% endif %}
   </div>
 
   <hr class="report-divider" />
@@ -93,7 +96,7 @@
     <select id="term-selector" class="term-view-select" onchange="switchView(this.value)">
       {% for t in valid_terms %}
       <option value="{{ t }}" {% if t == default_term %}selected{% endif %}>
-        Term {{ t }}{% if all_terms[t] %} — Released ✔{% else %} — Pending{% endif %}
+        {{ _('Term %(n)s', n=t) }}{% if all_terms[t] %} — {{ _('Released') }} ✔{% else %} — {{ _('Pending') }}{% endif %}
       </option>
       {% endfor %}
     </select>
@@ -109,7 +112,7 @@
     <!-- Card header ─────────────────────────────────────────────── -->
     <div class="term-card-header">
       <div>
-        <h2 class="term-card-title">Term {{ t }} Report</h2>
+        <h2 class="term-card-title">{{ _('Term %(n)s Report', n=t) }}</h2>
         <p class="term-card-sub">{{ student.Name }} &bull; {{ student.ClassLabel }}</p>
       </div>
       {% if all_terms[t] %}

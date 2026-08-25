@@ -29,7 +29,9 @@ POST /update/search     → teacher: look up student + term, show score form
 POST /update/save       → teacher: validate, calculate, upsert row
 """
 
+import glob
 import os
+from datetime import datetime
 import pandas as pd
 from flask import (
     Flask,
@@ -40,6 +42,7 @@ from flask import (
     session,
     flash,
 )
+from werkzeug.utils import secure_filename
 from translations import TRANSLATIONS
 
 # ── App setup ──────────────────────────────────────────────────────────────────
@@ -50,6 +53,9 @@ app = Flask(__name__)
 #   os.environ['SECRET_KEY'] = 'your-random-secret-here'
 # Generate a good value once with: python -c "import secrets; print(secrets.token_hex(32))"
 app.secret_key = os.environ.get("SECRET_KEY", "change-me-before-deploying")
+
+# Reject overly large uploads outright, before they touch disk (5 MB covers a photo).
+app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
 
 # ── i18n: dict-based translation system ───────────────────────────────────────
 SUPPORTED_LANGUAGES = ("en", "km")
@@ -90,6 +96,77 @@ def inject_translator():
 
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 EXCEL_PATH = os.path.join(BASE_DIR, "grades.xlsx")
+
+# ── Student photos (stored as static/photos/{StudentID}.<ext>) ────────────────
+PHOTOS_DIR         = os.path.join(BASE_DIR, "static", "photos")
+ALLOWED_PHOTO_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+os.makedirs(PHOTOS_DIR, exist_ok=True)
+
+
+def _photo_path_for(student_id: str) -> str | None:
+    """Return the existing photo file path for a StudentID, or None if none exists."""
+    student_id = str(student_id).strip()
+    if not student_id or student_id == "nan":
+        return None
+    for ext in ALLOWED_PHOTO_EXTS:
+        candidate = os.path.join(PHOTOS_DIR, secure_filename(student_id) + ext)
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def get_student_photo_url(student_id: str) -> str | None:
+    """Return the static URL for a student's photo, or None if none is on file."""
+    path = _photo_path_for(student_id)
+    if path is None:
+        return None
+    return url_for("static", filename=f"photos/{os.path.basename(path)}")
+
+
+def save_student_photo(student_id: str, file_storage) -> bool:
+    """
+    Save an uploaded photo for a StudentID, replacing any previous one.
+    Returns True on success, False if the file was rejected (missing/bad extension).
+    Filename is derived solely from the trusted StudentID, never from user input.
+    """
+    student_id = str(student_id).strip()
+    if not student_id or not file_storage or not file_storage.filename:
+        return False
+    ext = os.path.splitext(secure_filename(file_storage.filename))[1].lower()
+    if ext not in ALLOWED_PHOTO_EXTS:
+        return False
+    delete_student_photo(student_id)
+    file_storage.save(os.path.join(PHOTOS_DIR, secure_filename(student_id) + ext))
+    return True
+
+
+def delete_student_photo(student_id: str) -> None:
+    """Remove any stored photo file for a StudentID (no-op if none exists)."""
+    for path in glob.glob(os.path.join(PHOTOS_DIR, secure_filename(str(student_id).strip()) + ".*")):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+def rename_student_photo(old_id: str, new_id: str) -> None:
+    """Move a student's photo file to match a new StudentID, if one exists."""
+    old_path = _photo_path_for(old_id)
+    if old_path is None:
+        return
+    ext = os.path.splitext(old_path)[1]
+    new_path = os.path.join(PHOTOS_DIR, secure_filename(str(new_id).strip()) + ext)
+    os.replace(old_path, new_path)
+
+
+def report_generated_date(path: str) -> str:
+    """Date the given data file was last saved — used as the 'Report Generated' date."""
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        mtime = datetime.now().timestamp()
+    return datetime.fromtimestamp(mtime).strftime("%B %d, %Y")
+
 
 SCORE_COLS = ["Conduct", "CP", "HW_ASS", "QUIZ", "MidTerm", "Final"]
 
@@ -415,17 +492,6 @@ def get_students_by_class(students_df: pd.DataFrame, class_label: str) -> list:
     return subset.to_dict(orient="records")
 
 
-def get_class_students_map(students_df: pd.DataFrame) -> dict:
-    """
-    Build a mapping of ClassLabel -> [{StudentID, Name}, ...]
-    for embedding as JSON in the teacher UI.
-    """
-    result = {}
-    for label in get_class_labels(students_df):
-        result[label] = get_students_by_class(students_df, label)
-    return result
-
-
 def get_student_info(students_df: pd.DataFrame, student_id: str):
     """
     Return the Students sheet row for a given StudentID as a dict, or None.
@@ -742,6 +808,8 @@ def report():
         threshold    = PASS_THRESHOLD,
         valid_terms  = VALID_TERMS,
         default_term = get_latest_released_term(all_terms, VALID_TERMS),
+        report_generated = report_generated_date(EXCEL_PATH),
+        student_photo_url = get_student_photo_url(student_info.get("StudentID", "")),
     )
 
 
@@ -995,20 +1063,18 @@ def hod_student_preview(student_id):
 
 # ── Teacher: update scores ─────────────────────────────────────────────────────
 
-def _render_update(student=None, term=None, class_label=None,
-                   class_labels=None, class_students_map=None, error=None,
-                   changes_requested=None, score_cols=None, score_weights=None,
-                   valid_terms=None):
-    """Central render helper — keeps all three route functions DRY."""
+def _render_update(term=None, class_label=None, class_labels=None,
+                   class_rows=None, error=None, changes_requested=None,
+                   score_cols=None, score_weights=None, valid_terms=None):
+    """Central render helper — keeps the update routes DRY."""
     if error:
         flash(error, "error")
     return render_template(
         "update.html",
-        student              = student,
         term                 = term,
         class_label          = class_label,
         class_labels         = class_labels or [],
-        class_students_map   = class_students_map or {},
+        class_rows           = class_rows or [],
         score_cols           = score_cols if score_cols is not None else SCORE_COLS,
         score_weights        = score_weights if score_weights is not None else SCORE_WEIGHTS,
         valid_terms          = valid_terms if valid_terms is not None else VALID_TERMS,
@@ -1021,7 +1087,7 @@ def _load_for_update(dept="en"):
     Load both sheets and build the class metadata needed by the teacher page.
     For CN dept, normalises No->StudentID, Class->ClassLabel so the shared
     template and helpers work without modification.
-    Returns (students_df, grades_df, class_labels, class_students_map)
+    Returns (students_df, grades_df, class_labels)
     or raises FileNotFoundError / OSError.
     """
     if dept == "cn":
@@ -1031,9 +1097,8 @@ def _load_for_update(dept="en"):
         ).copy()
     else:
         students_df, grades_df = load_sheets()
-    class_labels       = get_class_labels(students_df)
-    class_students_map = get_class_students_map(students_df)
-    return students_df, grades_df, class_labels, class_students_map
+    class_labels = get_class_labels(students_df)
+    return students_df, grades_df, class_labels
 
 
 def _validate_term(raw: str):
@@ -1049,8 +1114,39 @@ def _validate_term(raw: str):
         return None, f"Term must be 1, 2, 3, or 4. Received: '{raw}'."
 
 
+def _class_term_rows(dept, students_df, grades_df, class_label, term, score_cols):
+    """Build one editable row per student in a class for a given term (blank if ungraded yet)."""
+    rows = []
+    for s in get_students_by_class(students_df, class_label):
+        sid = str(s.get("StudentID", "")).strip()
+        grade_row = None
+        if sid:
+            if dept == "cn":
+                grade_row = cn_get_term(grades_df, sid, term)
+            else:
+                grade_row = get_student_term(grades_df, sid, term)
+        if grade_row is not None:
+            scores = {col: grade_row.get(col, "") for col in score_cols}
+            final  = grade_row.get("FinalReport", grade_row.get("TotalGrade", ""))
+        else:
+            scores = {col: "" for col in score_cols}
+            final  = ""
+        rows.append({
+            "student_id": sid,
+            "name":       s.get("Name", ""),
+            "scores":     scores,
+            "final":      final,
+            "is_new":     grade_row is None,
+        })
+    return rows
+
+
 @app.route("/update", methods=["GET"])
 def update():
+    """
+    GET ?class_label=X&term=Y renders the whole-class score entry table
+    (mirrors the HOD review list) so a teacher can grade a class in one pass.
+    """
     if "teacher_user" not in session:
         flash("Please log in as a teacher to access this page.", "warning")
         return redirect(url_for("teacher_login_select"))
@@ -1060,12 +1156,8 @@ def update():
     sw   = CN_SCORE_WEIGHTS if dept == "cn" else SCORE_WEIGHTS
     vt   = CN_VALID_TERMS   if dept == "cn" else VALID_TERMS
 
-    prefill_id    = request.args.get("student_id",  "").strip()
-    prefill_term  = request.args.get("term",         "").strip()
-    prefill_class = request.args.get("class_label",  "").strip()
-
     try:
-        students_df, grades_df, class_labels, class_students_map = _load_for_update(dept)
+        students_df, grades_df, class_labels = _load_for_update(dept)
     except (FileNotFoundError, OSError) as exc:
         return _render_update(error=str(exc), score_cols=sc, score_weights=sw, valid_terms=vt)
 
@@ -1089,148 +1181,38 @@ def update():
                             "note":         row["RequestNote"] if row else "",
                         })
 
-    if prefill_id and prefill_term:
-        term, err = _validate_term(prefill_term)
+    sel_class = request.args.get("class_label", "").strip()
+    term_raw  = request.args.get("term", "").strip()
+
+    sel_term   = None
+    class_rows = []
+    if sel_class and term_raw:
+        sel_term, err = _validate_term(term_raw)
         if err:
             return _render_update(
                 class_labels=class_labels,
-                class_students_map=class_students_map,
                 changes_requested=changes_requested,
                 error=err,
                 score_cols=sc, score_weights=sw, valid_terms=vt,
             )
-        if dept == "cn":
-            grade_row = cn_get_term(grades_df, prefill_id, term)
-            if grade_row is not None:
-                grade_row["StudentID"]   = grade_row.pop("No", prefill_id)
-                grade_row["ClassLabel"]  = grade_row.get("Class", "")
-                grade_row["FinalReport"] = grade_row.get("TotalGrade", "")
-        else:
-            grade_row = get_student_term(grades_df, prefill_id, term)
-
-        student = grade_row
-        if student is not None:
-            info = get_student_info(students_df, prefill_id)
-            if info:
-                student["Name"]       = info["Name"]
-                student["ClassLabel"] = info["ClassLabel"]
-        return _render_update(
-            student=student, term=term,
-            class_label=prefill_class,
-            class_labels=class_labels,
-            class_students_map=class_students_map,
-            changes_requested=changes_requested,
-            score_cols=sc, score_weights=sw, valid_terms=vt,
-        )
+        class_rows = _class_term_rows(dept, students_df, grades_df, sel_class, sel_term, sc)
 
     return _render_update(
+        class_label=sel_class, term=sel_term,
         class_labels=class_labels,
-        class_students_map=class_students_map,
+        class_rows=class_rows,
         changes_requested=changes_requested,
         score_cols=sc, score_weights=sw, valid_terms=vt,
     )
 
 
-@app.route("/update/search", methods=["POST"])
-def update_search():
+@app.route("/update/save_class", methods=["POST"])
+def update_save_class():
     """
-    Phase 1 → Phase 2 transition.
-    Validates ClassLabel + StudentID + Term, then either loads the existing
-    grade row or prepares a blank entry for a new term.
-    """
-    if "teacher_user" not in session:
-        flash("Please log in as a teacher to access this page.", "warning")
-        return redirect(url_for("teacher_login_select"))
-
-    dept = session.get("teacher_dept", "en")
-    sc   = CN_SCORE_COLS    if dept == "cn" else SCORE_COLS
-    sw   = CN_SCORE_WEIGHTS if dept == "cn" else SCORE_WEIGHTS
-    vt   = CN_VALID_TERMS   if dept == "cn" else VALID_TERMS
-
-    class_label = request.form.get("class_label", "").strip()
-    student_id  = request.form.get("student_id",  "").strip()
-    term_raw    = request.form.get("term",         "").strip()
-
-    try:
-        students_df, grades_df, class_labels, class_students_map = _load_for_update(dept)
-    except (FileNotFoundError, OSError) as exc:
-        return _render_update(error=str(exc), score_cols=sc, score_weights=sw, valid_terms=vt)
-
-    if not student_id:
-        return _render_update(
-            class_label=class_label,
-            class_labels=class_labels,
-            class_students_map=class_students_map,
-            error="Please select a student before searching.",
-            score_cols=sc, score_weights=sw, valid_terms=vt,
-        )
-
-    term, err = _validate_term(term_raw)
-    if err:
-        return _render_update(
-            class_label=class_label,
-            class_labels=class_labels,
-            class_students_map=class_students_map,
-            error=err,
-            score_cols=sc, score_weights=sw, valid_terms=vt,
-        )
-
-    # Verify the student exists in the Students sheet
-    student_info = get_student_info(students_df, student_id)
-    if student_info is None:
-        return _render_update(
-            class_label=class_label,
-            class_labels=class_labels,
-            class_students_map=class_students_map,
-            error=f'No student found with ID "{student_id}". '
-                  f"Please check the selection and try again.",
-            term=term,
-            score_cols=sc, score_weights=sw, valid_terms=vt,
-        )
-
-    # Find the specific term grade row
-    if dept == "cn":
-        grade_row = cn_get_term(grades_df, student_id, term)
-        if grade_row is not None:
-            grade_row["StudentID"]   = grade_row.get("No", student_id)
-            grade_row["ClassLabel"]  = grade_row.get("Class", student_info.get("ClassLabel", ""))
-            grade_row["FinalReport"] = grade_row.get("TotalGrade", "")
-        student = grade_row
-    else:
-        student = get_student_term(grades_df, student_id, term)
-
-    if student is None:
-        # Student exists but this term hasn't been entered yet.
-        student = {
-            "StudentID":    student_info["StudentID"],
-            "Term":         term,
-            "Name":         student_info["Name"],
-            "ClassLabel":   student_info["ClassLabel"],
-            **{col: "" for col in sc},
-            "FinalReport":  "",
-            "_is_new_term": True,
-        }
-    else:
-        # Merge Name and ClassLabel from Students sheet
-        student["Name"]       = student_info["Name"]
-        student["ClassLabel"] = student_info["ClassLabel"]
-
-    return _render_update(
-        student=student, term=term,
-        class_label=class_label,
-        class_labels=class_labels,
-        class_students_map=class_students_map,
-        score_cols=sc, score_weights=sw, valid_terms=vt,
-    )
-
-
-@app.route("/update/save", methods=["POST"])
-def update_save():
-    """
-    Phase 2 submission.
-    Validates all inputs, then either updates the existing row or inserts a
-    new one.  Recalculates FinalReport / TotalGrade before saving.
-    Routes to the correct Excel file based on session['teacher_dept'].
+    Whole-class submission from the score entry table.
+    Rows left entirely blank are skipped (not yet graded); rows with any
+    value filled in must have every column valid (0-100) or the whole
+    submission is rejected with per-student errors so nothing saves half-done.
     """
     if "teacher_user" not in session:
         flash("Please log in as a teacher to access this page.", "warning")
@@ -1238,193 +1220,122 @@ def update_save():
 
     dept = session.get("teacher_dept", "en")
     sc   = CN_SCORE_COLS    if dept == "cn" else SCORE_COLS
-    sw   = CN_SCORE_WEIGHTS if dept == "cn" else SCORE_WEIGHTS
-    vt   = CN_VALID_TERMS   if dept == "cn" else VALID_TERMS
 
     class_label = request.form.get("class_label", "").strip()
-    student_id  = request.form.get("student_id",  "").strip()
-    term_raw    = request.form.get("term",         "").strip()
-
-    # ── Step 1: validate term ──────────────────────────────────────────────────
-    term, term_err = _validate_term(term_raw)
+    term, term_err = _validate_term(request.form.get("term", ""))
     if term_err:
-        return _render_update(error=term_err, score_cols=sc, score_weights=sw, valid_terms=vt)
+        flash(term_err, "error")
+        return redirect(url_for("update", class_label=class_label))
 
-    # ── Step 2: validate score inputs ─────────────────────────────────────────
-    scores = {}
-    for col in sc:
-        raw = request.form.get(col, "").strip()
-        try:
-            value = float(raw)
-            if not (0.0 <= value <= 100.0):
-                raise ValueError(f"out of range: {value}")
-        except ValueError:
+    student_ids = request.form.getlist("student_ids")
+    col_values  = {col: request.form.getlist(f"{col}[]") for col in sc}
+
+    to_save = []
+    errors  = []
+    skipped_no_id = 0
+    for i, sid in enumerate(student_ids):
+        if not sid:
+            # A row without a Student ID can't be reliably matched to a grade row.
+            if any(col_values[col][i].strip() for col in sc):
+                skipped_no_id += 1
+            continue
+
+        raw = {col: col_values[col][i].strip() for col in sc}
+        if all(v == "" for v in raw.values()):
+            continue  # untouched this session — leave for later
+
+        scores = {}
+        for col, val_str in raw.items():
             try:
-                students_df, grades_df, class_labels, class_students_map = _load_for_update(dept)
-                if dept == "cn":
-                    student = cn_get_term(grades_df, student_id, term)
-                    if student is not None:
-                        student["FinalReport"] = student.get("TotalGrade", "")
-                else:
-                    student = get_student_term(grades_df, student_id, term)
-                if student is not None:
-                    info = get_student_info(students_df, student_id)
-                    if info:
-                        student["Name"]       = info["Name"]
-                        student["ClassLabel"] = info["ClassLabel"]
-            except (FileNotFoundError, OSError):
-                student            = None
-                class_labels       = []
-                class_students_map = {}
-            flash(
-                f'"{col}" must be a number between 0 and 100. '
-                f"Received: '{raw}'",
-                "error",
-            )
-            return render_template(
-                "update.html",
-                student=student, term=term,
-                class_label=class_label,
-                class_labels=class_labels,
-                class_students_map=class_students_map,
-                score_cols=sc, score_weights=sw, valid_terms=vt,
-            )
-        scores[col] = value
+                val = float(val_str)
+                if not (0.0 <= val <= 100.0):
+                    raise ValueError
+                scores[col] = val
+            except ValueError:
+                errors.append(f'{sid}: "{col}" must be a number between 0 and 100 (got "{val_str}").')
+        if len(scores) == len(sc):
+            to_save.append((sid, scores))
 
-    # ── Step 3: load workbook ──────────────────────────────────────────────────
+    if skipped_no_id:
+        flash(f"{skipped_no_id} student(s) without a Student ID were skipped — assign an ID first.", "warning")
+
+    if errors:
+        for e in errors:
+            flash(e, "error")
+        return redirect(url_for("update", class_label=class_label, term=term))
+
+    if not to_save:
+        flash("No scores were entered — nothing to save.", "warning")
+        return redirect(url_for("update", class_label=class_label, term=term))
+
     try:
-        students_df, grades_df, class_labels, class_students_map = _load_for_update(dept)
+        students_df, grades_df, _ = _load_for_update(dept)
     except (FileNotFoundError, OSError) as exc:
-        return _render_update(error=str(exc), term=term, score_cols=sc, score_weights=sw, valid_terms=vt)
+        flash(str(exc), "error")
+        return redirect(url_for("update", class_label=class_label, term=term))
 
-    student_info = get_student_info(students_df, student_id)
-    if student_info is None:
-        return _render_update(
-            class_labels=class_labels,
-            class_students_map=class_students_map,
-            error=f'Student "{student_id}" not found.',
-            term=term,
-            score_cols=sc, score_weights=sw, valid_terms=vt,
-        )
-
-    student_name = student_info["Name"]
-
-    # ── Step 4a: Chinese dept — operate on CN Excel ────────────────────────────
     if dept == "cn":
         cn_students_df, cn_grades_df = load_cn_sheets()
-        new_total = cn_calc_total(scores)
-        status    = "Pass" if new_total >= CN_PASS_THRESHOLD else "Fail"
-
-        try:
+        for sid, scores in to_save:
+            new_total = cn_calc_total(scores)
+            status    = "Pass" if new_total >= CN_PASS_THRESHOLD else "Fail"
             mask = (
-                (cn_grades_df["No"].astype(str).str.strip() == student_id) &
+                (cn_grades_df["No"].astype(str).str.strip() == sid) &
                 (cn_grades_df["Term"].astype(int) == term)
             )
-        except KeyError:
-            mask = pd.Series([False] * len(cn_grades_df))
-
-        idx = cn_grades_df.index[mask]
-        if not idx.empty:
-            row_idx = idx[0]
-            for col, val in scores.items():
-                cn_grades_df.at[row_idx, col] = val
-            cn_grades_df.at[row_idx, "TotalGrade"] = new_total
-            cn_grades_df.at[row_idx, "Status"]     = status
-        else:
-            new_row = {
-                "No": student_id, "Term": term,
-                **scores,
-                "TotalGrade": new_total,
-                "Status":     status,
-            }
-            cn_grades_df = pd.concat(
-                [cn_grades_df, pd.DataFrame([new_row])], ignore_index=True
-            )
-            cn_grades_df = cn_grades_df.sort_values(["No", "Term"]).reset_index(drop=True)
-
+            idx = cn_grades_df.index[mask]
+            if not idx.empty:
+                row_idx = idx[0]
+                for col, val in scores.items():
+                    cn_grades_df.at[row_idx, col] = val
+                cn_grades_df.at[row_idx, "TotalGrade"] = new_total
+                cn_grades_df.at[row_idx, "Status"]     = status
+            else:
+                new_row = {"No": sid, "Term": term, **scores,
+                           "TotalGrade": new_total, "Status": status}
+                cn_grades_df = pd.concat(
+                    [cn_grades_df, pd.DataFrame([new_row])], ignore_index=True
+                )
+        cn_grades_df = cn_grades_df.sort_values(["No", "Term"]).reset_index(drop=True)
         try:
             save_cn_sheets(cn_students_df, cn_grades_df)
         except OSError as exc:
             flash(str(exc), "error")
-            return _render_update(
-                term=term, class_label=class_label,
-                class_labels=class_labels, class_students_map=class_students_map,
-                score_cols=sc, score_weights=sw, valid_terms=vt,
-            )
-
-        flash(
-            f"✓ Term {term} scores saved for {student_name} "
-            f"(Total Grade: {new_total}).",
-            "success",
-        )
-        return redirect(url_for(
-            "update", student_id=student_id, term=term, class_label=class_label,
-        ))
-
-    # ── Step 4b: English dept — operate on EN Excel ────────────────────────────
-    try:
-        mask = (
-            (grades_df["StudentID"].astype(str).str.strip() == student_id) &
-            (grades_df["Term"].astype(int) == term)
-        )
-    except KeyError:
-        mask = pd.Series([False] * len(grades_df))
-
-    idx = grades_df.index[mask]
-
-    if not idx.empty:
-        row_idx = idx[0]
-        for col, value in scores.items():
-            grades_df.at[row_idx, col] = value
-        new_final = calc_final(grades_df.loc[row_idx])
-        grades_df.at[row_idx, "FinalReport"] = new_final
+            return redirect(url_for("update", class_label=class_label, term=term))
     else:
-        new_row = {
-            "StudentID": student_info["StudentID"],
-            "Term":      term,
-            **scores,
-            "FinalReport": 0.0,
-        }
-        temp = pd.Series(new_row)
-        new_row["FinalReport"] = calc_final(temp)
-        new_final = new_row["FinalReport"]
-
-        grades_df = pd.concat(
-            [grades_df, pd.DataFrame([new_row])], ignore_index=True
-        )
+        for sid, scores in to_save:
+            mask = (
+                (grades_df["StudentID"].astype(str).str.strip() == sid) &
+                (grades_df["Term"].astype(int) == term)
+            )
+            idx = grades_df.index[mask]
+            if not idx.empty:
+                row_idx = idx[0]
+                for col, val in scores.items():
+                    grades_df.at[row_idx, col] = val
+                grades_df.at[row_idx, "FinalReport"] = calc_final(grades_df.loc[row_idx])
+            else:
+                new_row = {"StudentID": sid, "Term": term, **scores, "FinalReport": 0.0}
+                temp = pd.Series(new_row)
+                new_row["FinalReport"] = calc_final(temp)
+                grades_df = pd.concat(
+                    [grades_df, pd.DataFrame([new_row])], ignore_index=True
+                )
         grades_df = grades_df.sort_values(["StudentID", "Term"]).reset_index(drop=True)
-
-    # ── Step 5: persist ────────────────────────────────────────────────────────
-    try:
-        save_sheets(students_df, grades_df)
-    except OSError as exc:
-        student = get_student_term(grades_df, student_id, term)
-        if student is not None:
-            student["Name"]       = student_name
-            student["ClassLabel"] = student_info["ClassLabel"]
-        flash(str(exc), "error")
-        return render_template(
-            "update.html",
-            student=student, term=term,
-            class_label=class_label,
-            class_labels=class_labels,
-            class_students_map=class_students_map,
-            score_cols=sc, score_weights=sw, valid_terms=vt,
-        )
+        try:
+            save_sheets(students_df, grades_df)
+        except OSError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("update", class_label=class_label, term=term))
 
     flash(
-        f"✓ Term {term} scores saved for {student_name} "
-        f"(Final Report: {new_final}). "
-        f"Results are now pending review — they will become visible to parents "
-        f"once approved by the Head of Department.",
+        f"✓ Saved Term {term} scores for {len(to_save)} student(s) in {class_label}. "
+        f"Results are pending HOD review before parents can see them."
+        if dept == "en" else
+        f"✓ Saved Term {term} scores for {len(to_save)} student(s) in {class_label}.",
         "success",
     )
-    return redirect(url_for(
-        "update",
-        student_id=student_id,
-        term=term,
-        class_label=class_label,
-    ))
+    return redirect(url_for("update", class_label=class_label, term=term))
 
 
 # ── Admin: authentication ──────────────────────────────────────────────────────
@@ -1547,6 +1458,8 @@ def admin_dashboard():
         df = df[name_match | id_match]
 
     students = df.fillna("").to_dict(orient="records")
+    for s in students:
+        s["_photo_url"] = get_student_photo_url(s["StudentID"])
 
     # Resolve the row to edit, if requested
     edit_student = None
@@ -1561,6 +1474,7 @@ def admin_dashboard():
                     "Name":           str(row["Name"]),
                     "ClassLabel":     str(row["ClassLabel"]),
                     "ParentPassword": str(row["ParentPassword"]),
+                    "_photo_url":     get_student_photo_url(str(row["StudentID"])),
                 }
         except (ValueError, KeyError):
             pass
@@ -1634,6 +1548,13 @@ def admin_student_add():
         flash(str(exc), "error")
         return redirect(url_for("admin_dashboard", dept=dept, filter_class=fc, q=q))
 
+    photo = request.files.get("photo")
+    if photo and photo.filename:
+        if not student_id:
+            flash("Photo was not saved — a Student ID is required to attach a photo.", "warning")
+        elif not save_student_photo(student_id, photo):
+            flash("Photo not saved — only JPG, PNG, or WEBP images are supported.", "warning")
+
     flash(f'Student "{name}" added to {class_label}.', "success")
     return redirect(url_for("admin_dashboard", dept=dept, filter_class=class_label))
 
@@ -1693,6 +1614,10 @@ def admin_student_edit():
         grades_mask = grades_df[grades_id_col].astype(str).str.strip() == old_id
         grades_df.loc[grades_mask, grades_id_col] = student_id
         students_df.at[row_idx, "StudentID"] = student_id
+        if student_id:
+            rename_student_photo(old_id, student_id)
+        else:
+            delete_student_photo(old_id)
 
     students_df.at[row_idx, "Name"]           = name
     students_df.at[row_idx, "ClassLabel"]     = class_label
@@ -1703,6 +1628,14 @@ def admin_student_edit():
     except OSError as exc:
         flash(str(exc), "error")
         return redirect(url_for("admin_dashboard", dept=dept, edit=row_idx))
+
+    photo = request.files.get("photo")
+    if photo and photo.filename:
+        current_id = student_id or old_id
+        if not current_id:
+            flash("Photo was not saved — a Student ID is required to attach a photo.", "warning")
+        elif not save_student_photo(current_id, photo):
+            flash("Photo not saved — only JPG, PNG, or WEBP images are supported.", "warning")
 
     flash(f'Student "{name}" updated.', "success")
     return redirect(url_for("admin_dashboard", dept=dept, filter_class=class_label))
@@ -1752,6 +1685,9 @@ def admin_student_delete():
     except OSError as exc:
         flash(str(exc), "error")
         return redirect(url_for("admin_dashboard", dept=dept))
+
+    if student_id_val and student_id_val != "nan":
+        delete_student_photo(student_id_val)
 
     flash(f'Student "{student_name}" deleted.', "success")
     return redirect(url_for("admin_dashboard", dept=dept, filter_class=filter_class))
@@ -2081,6 +2017,8 @@ def cn_report():
         ytd_passed    = ytd_passed,
         threshold     = CN_PASS_THRESHOLD,
         valid_terms   = CN_VALID_TERMS,
+        report_generated = report_generated_date(CN_EXCEL_PATH),
+        student_photo_url = get_student_photo_url(student_info.get("No", "")),
     )
 
 

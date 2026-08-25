@@ -60,37 +60,40 @@
   <hr class="report-divider" />
 
   <!-- â”€â”€ Student info â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-  <div class="report-meta">
-    <div class="report-meta-item">
-      <span class="meta-label">{{ _('Student Name') }}</span>
-      <span class="meta-value">{{ student.Name }}</span>
+  <div class="report-meta-row">
+    <div class="report-meta">
+      <div class="report-meta-item">
+        <span class="meta-label">{{ _('Student Name') }}</span>
+        <span class="meta-value">{{ student.Name }}</span>
+      </div>
+      <div class="report-meta-item">
+        <span class="meta-label">{{ _('No. in List') }}</span>
+        <span class="meta-value">{{ student.No if student.No else 'â€”' }}</span>
+      </div>
+      <div class="report-meta-item">
+        <span class="meta-label">{{ _('Class') }}</span>
+        <span class="meta-value">{{ student.Class if student.Class else 'â€”' }}</span>
+      </div>
+      <div class="report-meta-item">
+        <span class="meta-label">{{ _('Department') }}</span>
+        <span class="meta-value">{{ _('Chinese (CN Program)') }}</span>
+      </div>
+      <div class="report-meta-item">
+        <span class="meta-label">{{ _('Report Generated') }}</span>
+        <span class="meta-value">{{ report_generated }}</span>
+      </div>
+      <div class="report-meta-item">
+        <span class="meta-label">{{ _('Terms Released') }}</span>
+        <span class="meta-value">
+          {{ all_terms.values() | select | list | length }} / 4
+        </span>
+      </div>
     </div>
-    <div class="report-meta-item">
-      <span class="meta-label">{{ _('No. in List') }}</span>
-      <span class="meta-value">{{ student.No if student.No else 'â€”' }}</span>
-    </div>
-    <div class="report-meta-item">
-      <span class="meta-label">{{ _('Class') }}</span>
-      <span class="meta-value">{{ student.Class if student.Class else 'â€”' }}</span>
-    </div>
-    <div class="report-meta-item">
-      <span class="meta-label">{{ _('Department') }}</span>
-      <span class="meta-value">{{ _('Chinese (CN Program)') }}</span>
-    </div>
-    <div class="report-meta-item">
-      <span class="meta-label">{{ _('Report Generated') }}</span>
-      <span class="meta-value" id="cn-report-date"></span>
-      <script>
-        document.getElementById('cn-report-date').textContent =
-          new Date().toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'});
-      </script>
-    </div>
-    <div class="report-meta-item">
-      <span class="meta-label">{{ _('Terms Released') }}</span>
-      <span class="meta-value">
-        {{ all_terms.values() | select | list | length }} / 4
-      </span>
-    </div>
+    {% if student_photo_url %}
+      <img src="{{ student_photo_url }}" alt="{{ student.Name }}" class="student-photo" />
+    {% else %}
+      <div class="student-photo student-photo-placeholder" aria-hidden="true">👤</div>
+    {% endif %}
   </div>
 
   <hr class="report-divider" />
@@ -131,7 +134,7 @@
       <option value="master">{{ _('Master Overview (All Terms)') }}</option>
       {% for t in valid_terms %}
       <option value="{{ t }}">
-        Term {{ t }}{% if all_terms[t] %} â€” Released âœ”{% else %} â€” Pending{% endif %}
+        {{ _('Term %(n)s', n=t) }}{% if all_terms[t] %} — {{ _('Released') }} ✔{% else %} — {{ _('Pending') }}{% endif %}
       </option>
       {% endfor %}
     </select>
@@ -151,7 +154,7 @@
             <th class="term-weight-col">{{ _('Weight') }}</th>
             {% for t in valid_terms %}
             <th class="term-col {{ 'term-col-released' if all_terms[t] else 'term-col-pending' }}">
-              Term {{ t }}
+              {{ _('Term %(n)s', n=t) }}
               {% if all_terms[t] %}
                 <span class="term-th-badge released">âœ”</span>
               {% else %}
@@ -337,7 +340,7 @@
 
     <div class="term-card-header">
       <div>
-        <h2 class="term-card-title">Term {{ t }} Report â€” Chinese Department</h2>
+        <h2 class="term-card-title">{{ _('Term %(n)s Report – Chinese Department', n=t) }}</h2>
         <p class="term-card-sub">{{ student.Name }} &bull; {{ student.Class or 'â€”' }}</p>
       </div>
       {% if all_terms[t] %}

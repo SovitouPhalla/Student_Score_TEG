@@ -78,6 +78,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # ── Report card — term selector ───────────────────────────────────────
         "View Term":                     "View Term",
         "Master Overview (All Terms)":   "Master Overview (All Terms)",
+        "Term %(n)s":                    "Term %(n)s",
+        "Term %(n)s Report":             "Term %(n)s Report",
+        "Term %(n)s Report \u2013 Chinese Department":
+            "Term %(n)s Report \u2013 Chinese Department",
 
         # ── Report card — score table ─────────────────────────────────────────
         "All-Term Score Breakdown":      "All-Term Score Breakdown",
@@ -208,6 +212,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # ── Report card — term selector ───────────────────────────────────────
         "View Term":                     "ជ្រេីសរើសវគ្គសិក្សា",
         "Master Overview (All Terms)":   "ទិដ្ឋភាពសរុប (គ្រប់ក្រតា)",
+        "Term %(n)s":                    "ក្រតាទី %(n)s",
+        "Term %(n)s Report":             "របាយការណ៍ក្រតាទី %(n)s",
+        "Term %(n)s Report \u2013 Chinese Department":
+            "របាយការណ៍ក្រតាទី %(n)s \u2013 ថ្នាក់សិក្សាភាសាចិន",
 
         # ── Report card — score table ─────────────────────────────────────────
         "All-Term Score Breakdown":      "សង្ខេបពិន្ទុគ្រប់ក្រតា",
