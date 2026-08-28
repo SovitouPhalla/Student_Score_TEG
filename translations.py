@@ -168,17 +168,17 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
 
         # ── Landing page ──────────────────────────────────────────────────────
         "Welcome to the Student Report Portal":
-            "សូមស្វាគមន៍មកកាន់គេហទំព័ររបាយការណ៍សិស្សានុសិស្ស",
+            "សូមស្វាគមន៍មកកាន់គេហទំព័ររបាយការណ៍សិក្សាសិស្សានុសិស្ស",
         "Select your department below to view a term report card.":
             "សូមជ្រើសរើសកម្មវិធីសិក្សាដូចខាងក្រោម ដើម្បីមើលលទ្ធផលសិក្សា",
         "English Department":            "ថ្នាក់សិក្សាភាសាអង់គ្លេស",
         "Chinese Department":            "ថ្នាក់សិក្សាភាសាចិន",
 
         # ── Login ─────────────────────────────────────────────────────────────
-        "Parent / Guardian Login":       "ការចូលជំពូករបស់មាតា-បិតា / អ្នកអាណាព្យាបាល",
+        "Parent / Guardian Login":       "",
         "Chinese Department Login":      "ការចូលជំពូកថ្នាក់ភាសាចិន",
         "Enter your child's full name and the password provided by the school.":
-            "បំពេញឈ្មោះពេញរបស់កូន និងលេខសំងាត់ដែលបានផ្តល់ដោយសាលា",
+            "ចូលបំពេញឈ្មោះពេញរបស់សិស្សានុសិស្សនិងអត្តលេខ",
         "Student Full Name":             "ឈ្មោះពេញរបស់សិស្ស",
         "Child's Class (to clarify)":    "ថ្នាក់របស់កូន (ដើម្បីបញ្ជាក់)",
         "— Select Class —":              "— ជ្រើសរើសថ្នាក់ —",
@@ -186,17 +186,17 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "មានសិស្សច្រើននាក់ប្រើឈ្មោះនេះ។ សូមជ្រើសរើសថ្នាក់របស់កូន ដើម្បីបន្ត",
         "Multiple students share this name. Please select your child's class.":
             "មានសិស្សច្រើននាក់ប្រើឈ្មោះនេះ។ សូមជ្រើសរើសថ្នាក់របស់កូន",
-        "Parent Password":               "លេខសំងាត់មាតា-បិតា",
+        "Parent Password":               "អត្តលេខ",
         "Enter password":                "វាយបញ្ចូលលេខសំងាត់",
         "View Report Card":              "មើលក្រដាសលទ្ធផល",
         "Wrong department?":             "ខុសថ្នាក់សិក្សាមែនទែ?",
 
         # ── Report card — school header ───────────────────────────────────────
-        "Official Term Report Card":     "ក្រដាសលទ្ធផលសិក្សាផ្លូវការ",
+        "Official Term Report Card":     "ប្រតិបត្តពិន្ទុ",
         "Academic Year 2024 \u2013 2025":
             "ឆ្នាំសិក្សា ២០២៤ \u2013 ២០២៥",
         "Chinese Department \u2013 Official Term Report Card":
-            "ថ្នាក់សិក្សាភាសាចិន \u2013 ក្រដាសលទ្ធផលសិក្សាផ្លូវការ",
+            "ថ្នាក់សិក្សាភាសាចិន \u2013 ប្រតិបត្តពិន្ទុ",
         "CN Program \u2022 Academic Year 2024 \u2013 2025":
             "កម្មវិធី CN \u2022 ឆ្នាំសិក្សា ២០២៤ \u2013 ២០២៥",
 
@@ -212,10 +212,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # ── Report card — term selector ───────────────────────────────────────
         "View Term":                     "ជ្រេីសរើសវគ្គសិក្សា",
         "Master Overview (All Terms)":   "ទិដ្ឋភាពសរុប (គ្រប់ក្រតា)",
-        "Term %(n)s":                    "ក្រតាទី %(n)s",
-        "Term %(n)s Report":             "របាយការណ៍ក្រតាទី %(n)s",
+        "Term %(n)s":                    "វគ្គទី %(n)s",
+        "Term %(n)s Report":             "របាយការណ៍វគ្គសិក្សាទី %(n)s",
         "Term %(n)s Report \u2013 Chinese Department":
-            "របាយការណ៍ក្រតាទី %(n)s \u2013 ថ្នាក់សិក្សាភាសាចិន",
+            "របាយការណ៍វគ្គសិក្សាទី %(n)s \u2013 ថ្នាក់សិក្សាភាសាចិន",
 
         # ── Report card — score table ─────────────────────────────────────────
         "All-Term Score Breakdown":      "សង្ខេបពិន្ទុគ្រប់ក្រតា",
@@ -232,7 +232,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # ── English department score columns ──────────────────────────────────
         "Conduct":                       "ឥរិយាបថ",
         "Class Participation":           "ការចូលរួមក្នុងថ្នាក់",
-        "Homework & Assignments":        "កិច្ចការផ្ទះ និងកិច្ចការក្នុងថ្នាក់",
+        "Homework & Assignments":        "កិច្ចការផ្ទះ",
         "Quiz":                          "កិច្ចការសាលា",
         "Mid-Term Exam":                 "ការប្រឡងពាក់កណ្ដាលវគ្គសិក្សា",
         "Final Exam":                    "ការប្រឡងបញ្ចប់វគ្គសិក្សា",
@@ -272,7 +272,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Passing threshold: %(pct)s%%":  "ជម្រើសសិទ្ធ: %(pct)s%%",
         "No term data has been released yet. Check back after your first term results.":
             "មិនទាន់មានទិន្នន័យក្រតាណាមួយត្រូវបានចេញផ្សាយទេ។ "
-            "សូមត្រឡប់មកវិញបន្ទាប់ពីលទ្ធផលក្រតាទី ១",
+            "សូមត្រឡប់មកវិញបន្ទាប់ពីលទ្ធផលវគ្គទី ១",
 
         # ── Signature area ────────────────────────────────────────────────────
         "Class Teacher":                 "គ្រូប្រចាំថ្នាក់",
