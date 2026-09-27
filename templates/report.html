@@ -132,8 +132,8 @@
       <thead>
         <tr>
           <th>{{ _('Category') }}</th>
-          <th class="td-ctr">{{ _('Weight') }}</th>
           <th class="td-ctr">{{ _('Scores') }}</th>
+          <th class="td-ctr">{{ _('Contribution') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -142,21 +142,21 @@
             {% set s = all_terms[t][col] | float %}
             <tr>
               <td class="cat-name">{{ col_friendly[col] }}</td>
-              <td class="td-ctr cat-weight">{{ weight_pct[col] }}</td>
               <td class="td-ctr cat-weight">{{ "%.2f"|format(s) }}</td>
+              <td class="td-ctr cat-weight">{{ weight_pct[col] }}</td>
             </tr>
           {% else %}
             <tr>
               <td class="cat-name">{{ col_friendly[col] }}</td>
-              <td class="td-ctr cat-weight">{{ weight_pct[col] }}</td>
               <td class="nyr-cell td-ctr">{{ _('Not Yet Released') }}</td>
+              <td class="td-ctr cat-weight">{{ weight_pct[col] }}</td>
             </tr>
           {% endif %}
         {% endfor %}
       </tbody>
       <tfoot>
         <tr class="term-detail-final-row">
-          <td colspan="2"><strong>{{ _('Final Report Score') }}</strong></td>
+          <td><strong>{{ _('Final Report Score') }}</strong></td>
           {% if all_terms[t] %}
             <td class="td-ctr score-final">
               {{ "%.2f"|format(all_terms[t].FinalReport | float) }} / 100
@@ -164,9 +164,10 @@
           {% else %}
             <td class="nyr-cell td-ctr">{{ _('Not Yet Released') }}</td>
           {% endif %}
+          <td></td>
         </tr>
         <tr class="status-row">
-          <td colspan="2"><strong>{{ _('Grade') }}</strong></td>
+          <td><strong>{{ _('Grade') }}</strong></td>
           {% if all_terms[t] %}
             {% set fr_s = all_terms[t].FinalReport | float %}
             {% set lg_s = en_letter_grade(fr_s) %}
@@ -178,6 +179,7 @@
           {% else %}
             <td class="nyr-cell td-ctr">{{ _('Not Yet Released') }}</td>
           {% endif %}
+          <td></td>
         </tr>
       </tfoot>
     </table>

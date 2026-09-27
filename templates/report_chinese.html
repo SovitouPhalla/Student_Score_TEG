@@ -151,7 +151,7 @@
         <thead>
           <tr>
             <th class="term-cat-col">{{ _('Category') }}</th>
-            <th class="term-weight-col">{{ _('Weight') }}</th>
+            <th class="term-weight-col">{{ _('Contribution') }}</th>
             {% for t in valid_terms %}
             <th class="term-col {{ 'term-col-released' if all_terms[t] else 'term-col-pending' }}">
               {{ _('Term %(n)s', n=t) }}
@@ -368,8 +368,8 @@
       <thead>
         <tr>
           <th>{{ _('Category') }}</th>
-          <th class="td-ctr">{{ _('Weight') }}</th>
           <th class="td-ctr">{{ _('Scores') }}</th>
+          <th class="td-ctr">{{ _('Contribution') }}</th>
           <th class="td-ctr">{{ _('Grade') }}</th>
         </tr>
       </thead>
@@ -380,16 +380,17 @@
             {% if status_val in ('WF', 'AU') %}
               <tr>
                 <td class="cat-name">{{ col_friendly[col] }}</td>
+                <td class="nyr-cell td-ctr cn-special-status">{{ status_val }}</td>
                 <td class="td-ctr cat-weight">{{ weight_pct[col] }}</td>
-                <td class="nyr-cell td-ctr cn-special-status" colspan="2">{{ status_val }}</td>
+                <td class="td-ctr"></td>
               </tr>
             {% else %}
               {% set s = all_terms[t][col] | float %}
               {% set lg = letter_grade(s) | trim %}
               <tr>
                 <td class="cat-name">{{ col_friendly[col] }}</td>
-                <td class="td-ctr cat-weight">{{ weight_pct[col] }}</td>
                 <td class="td-ctr score-cell">{{ "%.1f"|format(s) }}</td>
+                <td class="td-ctr cat-weight">{{ weight_pct[col] }}</td>
                 <td class="td-ctr">
                   <span class="grade-badge grade-{{ lg }}">{{ lg }}</span>
                 </td>
@@ -398,27 +399,30 @@
           {% else %}
             <tr>
               <td class="cat-name">{{ col_friendly[col] }}</td>
+              <td class="nyr-cell td-ctr">{{ _('Not Yet Released') }}</td>
               <td class="td-ctr cat-weight">{{ weight_pct[col] }}</td>
-              <td class="nyr-cell td-ctr" colspan="2">{{ _('Not Yet Released') }}</td>
+              <td class="nyr-cell td-ctr">{{ _('Not Yet Released') }}</td>
             </tr>
           {% endif %}
         {% endfor %}
       </tbody>
       <tfoot>
         <tr class="term-detail-final-row">
-          <td colspan="2"><strong>{{ _('Final Report Score') }}</strong></td>
+          <td><strong>{{ _('Final Report Score') }}</strong></td>
           {% if all_terms[t] %}
             {% set status_val = all_terms[t].get('Status', '') | string | upper | trim %}
             {% if status_val in ('WF', 'AU') %}
-              <td class="nyr-cell td-ctr cn-special-status" colspan="2">{{ status_val }}</td>
+              <td class="nyr-cell td-ctr cn-special-status">{{ status_val }}</td>
             {% else %}
-              <td class="td-ctr score-final" colspan="2">
+              <td class="td-ctr score-final">
                 {{ "%.2f"|format(all_terms[t].TotalGrade | float) }} / 100
               </td>
             {% endif %}
           {% else %}
-            <td class="nyr-cell td-ctr" colspan="2">{{ _('Not Yet Released') }}</td>
+            <td class="nyr-cell td-ctr">{{ _('Not Yet Released') }}</td>
           {% endif %}
+          <td class="td-ctr cat-weight">100%</td>
+          <td></td>
         </tr>
 
         {% if all_terms[t] %}
