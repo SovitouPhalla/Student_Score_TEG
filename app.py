@@ -216,6 +216,19 @@ CN_SCORE_WEIGHTS = {
 CN_PASS_THRESHOLD = 60.0
 CN_VALID_TERMS    = (1, 2, 3, 4)
 
+
+def valid_terms_for_class(class_label: str, dept: str = "en") -> tuple:
+    """Return the available terms for a class in the selected department."""
+    if dept == "cn":
+        return CN_VALID_TERMS
+
+    normalized_class = str(class_label or "").strip().casefold()
+    if normalized_class.startswith("ielts"):
+        return tuple(range(1, 10))
+    if normalized_class in {"l1 morning", "l1 afternoon"}:
+        return tuple(range(1, 6))
+    return VALID_TERMS
+
 # ── Helpers: I/O ───────────────────────────────────────────────────────────────
 
 def load_sheets():
@@ -616,12 +629,12 @@ def get_student_term(grades_df: pd.DataFrame, student_id: str, term: int):
     return match.iloc[0].to_dict()
 
 
-def get_all_terms(grades_df: pd.DataFrame, student_id: str) -> dict:
+def get_all_terms(grades_df: pd.DataFrame, student_id: str, valid_terms=VALID_TERMS) -> dict:
     """
-    Return {1: row_dict_or_None, 2: ..., 3: ..., 4: ...} for a student.
+    Return the term rows for a student, with missing terms represented by None.
     Terms with no data are None — displayed as 'Not Yet Released'.
     """
-    return {t: get_student_term(grades_df, student_id, t) for t in VALID_TERMS}
+    return {t: get_student_term(grades_df, student_id, t) for t in valid_terms}
 
 
 def get_latest_released_term(all_terms: dict, valid_terms):
@@ -772,8 +785,9 @@ def report():
         session.clear()
         return redirect(url_for("login"))
 
+    valid_terms = valid_terms_for_class(student_info.get("ClassLabel", ""))
     # Build per-term data (None = not yet released)
-    all_terms = get_all_terms(grades_df, session["student_id"])
+    all_terms = get_all_terms(grades_df, session["student_id"], valid_terms)
 
     # ── Approval gate ──────────────────────────────────────────────────────────
     # Even if scores exist in Grades, parents only see them once the
@@ -806,8 +820,8 @@ def report():
         ytd_avg      = ytd_avg,
         ytd_passed   = ytd_passed,
         threshold    = PASS_THRESHOLD,
-        valid_terms  = VALID_TERMS,
-        default_term = get_latest_released_term(all_terms, VALID_TERMS),
+        valid_terms  = valid_terms,
+        default_term = get_latest_released_term(all_terms, valid_terms),
         report_generated = report_generated_date(EXCEL_PATH),
         student_photo_url = get_student_photo_url(student_info.get("StudentID", "")),
     )
@@ -896,7 +910,7 @@ def hod_review():
 
         try:
             term = int(term_raw)
-            if term not in VALID_TERMS:
+            if term not in valid_terms_for_class(class_label):
                 raise ValueError
         except (ValueError, TypeError):
             flash("Invalid term value.", "error")
@@ -969,7 +983,7 @@ def hod_review():
     sel_class    = request.args.get("class_label", "").strip()
     try:
         sel_term = int(request.args.get("term", "1"))
-        if sel_term not in VALID_TERMS:
+        if sel_term not in valid_terms_for_class(sel_class):
             sel_term = 1
     except (ValueError, TypeError):
         sel_term = 1
@@ -1000,7 +1014,7 @@ def hod_review():
         sel_class      = sel_class,
         sel_term       = sel_term,
         student_rows   = student_rows,
-        valid_terms    = VALID_TERMS,
+        valid_terms    = valid_terms_for_class(sel_class),
         score_cols     = SCORE_COLS,
         approved_count = approved_count,
         changes_count  = changes_count,
@@ -1033,7 +1047,8 @@ def hod_student_preview(student_id):
         return redirect(url_for("hod_review"))
 
     # No approval gate — show all available term data
-    all_terms = get_all_terms(grades_df, student_id)
+    valid_terms = valid_terms_for_class(student_info.get("ClassLabel", ""))
+    all_terms = get_all_terms(grades_df, student_id, valid_terms)
 
     completed = [t for t in all_terms.values() if t is not None]
     if completed:
@@ -1054,8 +1069,8 @@ def hod_student_preview(student_id):
         ytd_avg          = ytd_avg,
         ytd_passed       = ytd_passed,
         threshold        = PASS_THRESHOLD,
-        valid_terms      = VALID_TERMS,
-        default_term     = get_latest_released_term(all_terms, VALID_TERMS),
+        valid_terms      = valid_terms,
+        default_term     = get_latest_released_term(all_terms, valid_terms),
         preview_mode     = True,
         hod_preview      = True,
     )
@@ -1101,17 +1116,18 @@ def _load_for_update(dept="en"):
     return students_df, grades_df, class_labels
 
 
-def _validate_term(raw: str):
+def _validate_term(raw: str, valid_terms=VALID_TERMS):
     """
     Return (int_term, None) on success or (None, error_message) on failure.
     """
     try:
         t = int(raw)
-        if t not in VALID_TERMS:
+        if t not in valid_terms:
             raise ValueError
         return t, None
     except (ValueError, TypeError):
-        return None, f"Term must be 1, 2, 3, or 4. Received: '{raw}'."
+        allowed = ", ".join(str(term) for term in valid_terms)
+        return None, f"Term must be one of {allowed}. Received: '{raw}'."
 
 
 def _class_term_rows(dept, students_df, grades_df, class_label, term, score_cols):
@@ -1170,7 +1186,7 @@ def update():
                 sid = str(s.get("StudentID", "")).strip()
                 if not sid:
                     continue
-                for t in VALID_TERMS:
+                for t in valid_terms_for_class(cl, dept):
                     if term_review_status(approval_df, sid, t) == "changes_requested":
                         row = get_approval_row(approval_df, sid, t)
                         changes_requested.append({
@@ -1182,12 +1198,13 @@ def update():
                         })
 
     sel_class = request.args.get("class_label", "").strip()
+    vt = valid_terms_for_class(sel_class, dept) if sel_class else vt
     term_raw  = request.args.get("term", "").strip()
 
     sel_term   = None
     class_rows = []
     if sel_class and term_raw:
-        sel_term, err = _validate_term(term_raw)
+        sel_term, err = _validate_term(term_raw, vt)
         if err:
             return _render_update(
                 class_labels=class_labels,
@@ -1222,7 +1239,9 @@ def update_save_class():
     sc   = CN_SCORE_COLS    if dept == "cn" else SCORE_COLS
 
     class_label = request.form.get("class_label", "").strip()
-    term, term_err = _validate_term(request.form.get("term", ""))
+    term, term_err = _validate_term(
+        request.form.get("term", ""), valid_terms_for_class(class_label, dept)
+    )
     if term_err:
         flash(term_err, "error")
         return redirect(url_for("update", class_label=class_label))
@@ -1729,7 +1748,8 @@ def admin_student_preview(student_id):
         return redirect(url_for("approve_scores"))
 
     # No approval gate — show all available term data
-    all_terms = get_all_terms(grades_df, student_id)
+    valid_terms = valid_terms_for_class(student_info.get("ClassLabel", ""))
+    all_terms = get_all_terms(grades_df, student_id, valid_terms)
 
     completed = [t for t in all_terms.values() if t is not None]
     if completed:
@@ -1750,8 +1770,8 @@ def admin_student_preview(student_id):
         ytd_avg       = ytd_avg,
         ytd_passed    = ytd_passed,
         threshold     = PASS_THRESHOLD,
-        valid_terms   = VALID_TERMS,
-        default_term  = get_latest_released_term(all_terms, VALID_TERMS),
+        valid_terms   = valid_terms,
+        default_term  = get_latest_released_term(all_terms, valid_terms),
         preview_mode  = True,
     )
 

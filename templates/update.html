@@ -52,7 +52,7 @@
     <div class="search-row">
       <div class="form-group search-field-class">
         <label for="sel-class">Class</label>
-        <select id="sel-class" name="class_label" required>
+        <select id="sel-class" name="class_label" required onchange="this.form.elements.term.value = ''; this.form.submit()">
           <option value="">— Select Class —</option>
           {% for lbl in class_labels %}
           <option value="{{ lbl }}" {{ 'selected' if class_label == lbl else '' }}>{{ lbl }}</option>
@@ -61,7 +61,7 @@
       </div>
       <div class="form-group search-field-term">
         <label for="sel-term">Term</label>
-        <select id="sel-term" name="term" required>
+        <select id="sel-term" name="term">
           <option value="">— Select Term —</option>
           {% for t in valid_terms %}
           <option value="{{ t }}" {{ 'selected' if term == t else '' }}>Term {{ t }}</option>

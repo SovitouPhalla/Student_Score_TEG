@@ -24,7 +24,7 @@
       <div class="apv-selector-row">
         <div class="form-group apv-selector-class">
           <label for="sel-class">Class</label>
-          <select id="sel-class" name="class_label" required>
+          <select id="sel-class" name="class_label" required onchange="this.form.submit()">
             <option value="">— Select Class —</option>
             {% for cl in class_labels %}
             <option value="{{ cl }}" {{ 'selected' if sel_class == cl }}>{{ cl }}</option>
