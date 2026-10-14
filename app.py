@@ -1,7 +1,7 @@
 """
 app.py
 ------
-Student Term Report Portal  —  4-Term + ClassLabel Edition
+Student Term Report Portal  —  Class-Specific Terms + ClassLabel Edition
 Flask + pandas/openpyxl (Excel as database)
 
 Schema (grades.xlsx)
@@ -14,7 +14,7 @@ Schema (grades.xlsx)
     Homework  | Behavior | FinalReport
 
   Each student has exactly one row in Students.
-  Each student has up to 4 rows in Grades (one per term).
+  Each student has up to 5 rows in Grades (one per term).
   Name and ParentPassword live only in Students.
 
 Routes
@@ -22,7 +22,7 @@ Routes
 GET  /                  → redirect to /login
 GET  /login             → parent login form
 POST /login             → authenticate, redirect to /report
-GET  /report            → 4-term summary report card (session-protected)
+GET  /report            → class-specific term summary report card (session-protected)
 GET  /logout            → clear session, redirect to /login
 GET  /update            → teacher: search form
 POST /update/search     → teacher: look up student + term, show score form
@@ -31,6 +31,7 @@ POST /update/save       → teacher: validate, calculate, upsert row
 
 import glob
 import os
+import re
 from datetime import datetime
 import pandas as pd
 from flask import (
@@ -182,6 +183,7 @@ SCORE_WEIGHTS = {
 }
 
 VALID_TERMS    = (1, 2, 3, 4)
+CURRENT_ACADEMIC_YEAR = "2025-2026"
 PASS_THRESHOLD = 50.0
 
 
@@ -225,9 +227,32 @@ def valid_terms_for_class(class_label: str, dept: str = "en") -> tuple:
     normalized_class = str(class_label or "").strip().casefold()
     if normalized_class.startswith("ielts"):
         return tuple(range(1, 10))
-    if normalized_class in {"l1 morning", "l1 afternoon"}:
+    if normalized_class in {
+        "l1 morning",
+        "l1 afternoon",
+        "l6 evening",
+        "l9 afternoon",
+        "l2 morning",
+    }:
         return tuple(range(1, 6))
     return VALID_TERMS
+
+
+def next_academic_year(academic_year: str) -> str | None:
+    match = re.fullmatch(r"\s*(\d{4})-(\d{4})\s*", str(academic_year or ""))
+    if not match:
+        return None
+    start, end = map(int, match.groups())
+    if end != start + 1:
+        return None
+    return f"{start + 1}-{end + 1}"
+
+
+def next_level_class_label(class_label: str) -> str | None:
+    match = re.fullmatch(r"\s*L(\d+)(\s+(?:Morning|Afternoon|Evening))\s*", str(class_label or ""), re.IGNORECASE)
+    if not match:
+        return None
+    return f"L{int(match.group(1)) + 1}{match.group(2)}"
 
 # ── Helpers: I/O ───────────────────────────────────────────────────────────────
 
@@ -254,6 +279,31 @@ def load_sheets():
             engine="openpyxl",
             dtype={"StudentID": str},
         )
+        if "AcademicYear" not in students_df:
+            students_df["AcademicYear"] = CURRENT_ACADEMIC_YEAR
+        students_df["AcademicYear"] = (
+            students_df["AcademicYear"].fillna("").astype(str).str.strip()
+            .replace("", CURRENT_ACADEMIC_YEAR)
+        )
+        student_ids = students_df["StudentID"].astype(str).str.strip()
+        year_by_id = dict(zip(student_ids, students_df["AcademicYear"]))
+        class_by_id = dict(zip(student_ids, students_df["ClassLabel"].fillna("")))
+        if "AcademicYear" not in grades_df:
+            grades_df["AcademicYear"] = grades_df["StudentID"].astype(str).str.strip().map(year_by_id)
+        missing_year = grades_df["AcademicYear"].isna() | grades_df["AcademicYear"].astype(str).str.strip().eq("")
+        grades_df.loc[missing_year, "AcademicYear"] = (
+            grades_df.loc[missing_year, "StudentID"].astype(str).str.strip()
+            .map(year_by_id)
+        )
+        grades_df["AcademicYear"] = grades_df["AcademicYear"].fillna(CURRENT_ACADEMIC_YEAR)
+        if "ClassLabel" not in grades_df:
+            grades_df["ClassLabel"] = grades_df["StudentID"].astype(str).str.strip().map(class_by_id)
+        missing_class = grades_df["ClassLabel"].isna() | grades_df["ClassLabel"].astype(str).str.strip().eq("")
+        grades_df.loc[missing_class, "ClassLabel"] = (
+            grades_df.loc[missing_class, "StudentID"].astype(str).str.strip()
+            .map(class_by_id)
+        )
+        grades_df["ClassLabel"] = grades_df["ClassLabel"].fillna("")
         return students_df, grades_df
     except PermissionError:
         raise OSError(
@@ -340,17 +390,30 @@ def load_approval() -> pd.DataFrame:
         if "RequestNote" not in df.columns:
             df["RequestNote"] = ""
         df["RequestNote"] = df["RequestNote"].fillna("")
+        if "AcademicYear" not in df.columns:
+            df["AcademicYear"] = CURRENT_ACADEMIC_YEAR
+        df["AcademicYear"] = (
+            df["AcademicYear"].fillna("").astype(str).str.strip()
+            .replace("", CURRENT_ACADEMIC_YEAR)
+        )
         return df
     except (ValueError, PermissionError):
         return pd.DataFrame(columns=["StudentID", "Term", "Approved", "RequestNote"])
 
 
-def is_approved(approval_df: pd.DataFrame, student_id: str, term: int) -> bool:
-    """Return True only if the StudentID+Term row exists and Approved == True."""
+def is_approved(approval_df: pd.DataFrame, student_id: str, term: int,
+                academic_year: str = CURRENT_ACADEMIC_YEAR) -> bool:
+    """Return True only if the student, term, and academic-year row is approved."""
     try:
+        years = (
+            approval_df["AcademicYear"].astype(str).str.strip()
+            if "AcademicYear" in approval_df
+            else pd.Series(CURRENT_ACADEMIC_YEAR, index=approval_df.index)
+        )
         mask = (
             (approval_df["StudentID"].astype(str).str.strip() == str(student_id).strip()) &
-            (approval_df["Term"].astype(int) == int(term))
+            (approval_df["Term"].astype(int) == int(term)) &
+            (years == str(academic_year).strip())
         )
     except (KeyError, ValueError):
         return False
@@ -360,15 +423,22 @@ def is_approved(approval_df: pd.DataFrame, student_id: str, term: int) -> bool:
     return bool(match.iloc[0]["Approved"])
 
 
-def get_approval_row(approval_df: pd.DataFrame, student_id: str, term: int):
+def get_approval_row(approval_df: pd.DataFrame, student_id: str, term: int,
+                     academic_year: str = CURRENT_ACADEMIC_YEAR):
     """
     Return the full approval row as a dict for a StudentID+Term, or None.
     Guarantees RequestNote is always a stripped string (never NaN).
     """
     try:
+        years = (
+            approval_df["AcademicYear"].astype(str).str.strip()
+            if "AcademicYear" in approval_df
+            else pd.Series(CURRENT_ACADEMIC_YEAR, index=approval_df.index)
+        )
         mask = (
             (approval_df["StudentID"].astype(str).str.strip() == str(student_id).strip()) &
-            (approval_df["Term"].astype(int) == int(term))
+            (approval_df["Term"].astype(int) == int(term)) &
+            (years == str(academic_year).strip())
         )
     except (KeyError, ValueError):
         return None
@@ -380,14 +450,15 @@ def get_approval_row(approval_df: pd.DataFrame, student_id: str, term: int):
     return row
 
 
-def term_review_status(approval_df: pd.DataFrame, student_id: str, term: int) -> str:
+def term_review_status(approval_df: pd.DataFrame, student_id: str, term: int,
+                       academic_year: str = CURRENT_ACADEMIC_YEAR) -> str:
     """
     Returns the review status string for a StudentID+Term:
       'approved'           — Approved == True
       'changes_requested'  — Approved == False and RequestNote is non-empty
       'pending'            — everything else (no row, or row with no note)
     """
-    row = get_approval_row(approval_df, student_id, term)
+    row = get_approval_row(approval_df, student_id, term, academic_year)
     if row is None:
         return "pending"
     if bool(row.get("Approved")):
@@ -398,15 +469,20 @@ def term_review_status(approval_df: pd.DataFrame, student_id: str, term: int) ->
 
 
 def _upsert_approval(approval_df: pd.DataFrame, student_id: str, term: int,
-                     approved: bool, note: str) -> pd.DataFrame:
+                     approved: bool, note: str,
+                     academic_year: str = CURRENT_ACADEMIC_YEAR) -> pd.DataFrame:
     """
     Insert or update a single StudentID+Term row in approval_df.
     Returns the modified DataFrame.
     """
+    if "AcademicYear" not in approval_df:
+        approval_df = approval_df.copy()
+        approval_df["AcademicYear"] = CURRENT_ACADEMIC_YEAR
     try:
         mask = (
             (approval_df["StudentID"].astype(str).str.strip() == str(student_id).strip()) &
-            (approval_df["Term"].astype(int) == int(term))
+            (approval_df["Term"].astype(int) == int(term)) &
+            (approval_df["AcademicYear"].astype(str).str.strip() == str(academic_year).strip())
         )
     except (KeyError, ValueError):
         mask = pd.Series([], dtype=bool)
@@ -415,6 +491,7 @@ def _upsert_approval(approval_df: pd.DataFrame, student_id: str, term: int,
         new_row = pd.DataFrame([{
             "StudentID":   str(student_id),
             "Term":        int(term),
+            "AcademicYear": str(academic_year),
             "Approved":    approved,
             "RequestNote": note,
         }])
@@ -425,14 +502,16 @@ def _upsert_approval(approval_df: pd.DataFrame, student_id: str, term: int,
     return approval_df
 
 
-def save_sheets(students_df: pd.DataFrame, grades_df: pd.DataFrame) -> None:
+def save_sheets(students_df: pd.DataFrame, grades_df: pd.DataFrame,
+                approval_df: pd.DataFrame | None = None) -> None:
     """
     Persist Students and Grades back to grades.xlsx.
     Teachers, Admins, and ApprovalStatus sheets are loaded first and re-written unchanged.
     """
     teachers_df  = load_teachers()
     admins_df    = load_admins()
-    approval_df  = load_approval()
+    if approval_df is None:
+        approval_df = load_approval()
     try:
         with pd.ExcelWriter(EXCEL_PATH, engine="openpyxl") as writer:
             students_df.to_excel(writer,  sheet_name="Students",       index=False)
@@ -455,9 +534,10 @@ def save_approval(approval_df: pd.DataFrame) -> None:
     try:
         students_df, grades_df = load_sheets()
     except (FileNotFoundError, OSError):
-        students_df = pd.DataFrame(columns=["StudentID", "Name", "ClassLabel", "ParentPassword"])
+        students_df = pd.DataFrame(columns=["StudentID", "Name", "ClassLabel", "ParentPassword", "AcademicYear"])
         grades_df   = pd.DataFrame(columns=["StudentID", "Term", "Conduct", "CP",
-                                            "HW_ASS", "QUIZ", "MidTerm", "Final", "FinalReport"])
+                            "HW_ASS", "QUIZ", "MidTerm", "Final", "FinalReport",
+                            "AcademicYear", "ClassLabel"])
     teachers_df = load_teachers()
     admins_df   = load_admins()
     try:
@@ -501,7 +581,10 @@ def get_students_by_class(students_df: pd.DataFrame, class_label: str) -> list:
     ClassLabel comparison is always string-based (safe with parens like 'L6T2(2)').
     """
     mask = students_df["ClassLabel"].astype(str) == str(class_label)
-    subset = students_df[mask][["StudentID", "Name"]].copy()
+    columns = ["StudentID", "Name"]
+    if "AcademicYear" in students_df.columns:
+        columns.append("AcademicYear")
+    subset = students_df[mask][columns].copy()
     return subset.to_dict(orient="records")
 
 
@@ -614,12 +697,19 @@ def _hod_required():
 
 # ── Helpers: Grades sheet ──────────────────────────────────────────────────────
 
-def get_student_term(grades_df: pd.DataFrame, student_id: str, term: int):
-    """Return the row matching (StudentID, Term) as a dict, or None."""
+def get_student_term(grades_df: pd.DataFrame, student_id: str, term: int,
+                     academic_year: str = CURRENT_ACADEMIC_YEAR):
+    """Return the row matching student, term, and academic year, or None."""
     try:
+        years = (
+            grades_df["AcademicYear"].astype(str).str.strip()
+            if "AcademicYear" in grades_df
+            else pd.Series(CURRENT_ACADEMIC_YEAR, index=grades_df.index)
+        )
         mask = (
             (grades_df["StudentID"].astype(str).str.strip() == student_id.strip()) &
-            (grades_df["Term"].astype(int) == int(term))
+            (grades_df["Term"].astype(int) == int(term)) &
+            (years == str(academic_year).strip())
         )
     except (KeyError, ValueError):
         return None
@@ -629,12 +719,79 @@ def get_student_term(grades_df: pd.DataFrame, student_id: str, term: int):
     return match.iloc[0].to_dict()
 
 
-def get_all_terms(grades_df: pd.DataFrame, student_id: str, valid_terms=VALID_TERMS) -> dict:
+def get_all_terms(grades_df: pd.DataFrame, student_id: str, valid_terms=VALID_TERMS,
+                  academic_year: str = CURRENT_ACADEMIC_YEAR) -> dict:
     """
     Return the term rows for a student, with missing terms represented by None.
     Terms with no data are None — displayed as 'Not Yet Released'.
     """
-    return {t: get_student_term(grades_df, student_id, t) for t in valid_terms}
+    return {
+        t: get_student_term(grades_df, student_id, t, academic_year)
+        for t in valid_terms
+    }
+
+
+def student_academic_years(grades_df: pd.DataFrame, student_id: str,
+                           current_year: str) -> list[str]:
+    rows = grades_df[
+        grades_df["StudentID"].astype(str).str.strip() == str(student_id).strip()
+    ]
+    years = set(rows.get("AcademicYear", pd.Series(dtype=str)).dropna().astype(str))
+    years.add(str(current_year))
+    return sorted(years, reverse=True)
+
+
+def academic_year_for_class(students_df: pd.DataFrame, class_label: str) -> str:
+    if "AcademicYear" not in students_df:
+        return CURRENT_ACADEMIC_YEAR
+    classmates = students_df[
+        students_df["ClassLabel"].astype(str).str.strip() == str(class_label).strip()
+    ]
+    years = classmates["AcademicYear"].dropna().astype(str).str.strip()
+    years = years[years != ""]
+    if not years.empty:
+        return years.mode().iloc[0]
+    roster_years = students_df["AcademicYear"].dropna().astype(str).str.strip()
+    roster_years = [year for year in roster_years if next_academic_year(year)]
+    return max(roster_years, key=lambda year: int(year.split("-")[0])) if roster_years else CURRENT_ACADEMIC_YEAR
+
+
+def class_label_for_year(grades_df: pd.DataFrame, student_id: str,
+                         academic_year: str, fallback: str) -> str:
+    if "ClassLabel" not in grades_df or "AcademicYear" not in grades_df:
+        return fallback
+    rows = grades_df[
+        (grades_df["StudentID"].astype(str).str.strip() == str(student_id).strip()) &
+        (grades_df["AcademicYear"].astype(str).str.strip() == str(academic_year).strip())
+    ]
+    labels = rows["ClassLabel"].dropna().astype(str).str.strip()
+    labels = labels[labels != ""]
+    return labels.iloc[-1] if not labels.empty else fallback
+
+
+def promote_student_after_final_term(students_df: pd.DataFrame,
+                                     grades_df: pd.DataFrame,
+                                     student_id: str,
+                                     term: int) -> tuple[str, str] | None:
+    student = get_student_info(students_df, student_id)
+    if student is None:
+        return None
+    class_label = str(student.get("ClassLabel", "")).strip()
+    academic_year = str(student.get("AcademicYear") or CURRENT_ACADEMIC_YEAR).strip()
+    if term != max(valid_terms_for_class(class_label)):
+        return None
+    if get_student_term(grades_df, student_id, term, academic_year) is None:
+        return None
+    promoted_class = next_level_class_label(class_label)
+    promoted_year = next_academic_year(academic_year)
+    if promoted_class is None or promoted_year is None:
+        return None
+
+    student_mask = students_df["StudentID"].astype(str).str.strip() == str(student_id).strip()
+    row_idx = students_df.index[student_mask][0]
+    students_df.at[row_idx, "ClassLabel"] = promoted_class
+    students_df.at[row_idx, "AcademicYear"] = promoted_year
+    return promoted_class, promoted_year
 
 
 def get_latest_released_term(all_terms: dict, valid_terms):
@@ -785,9 +942,20 @@ def report():
         session.clear()
         return redirect(url_for("login"))
 
-    valid_terms = valid_terms_for_class(student_info.get("ClassLabel", ""))
+    current_year = str(student_info.get("AcademicYear") or CURRENT_ACADEMIC_YEAR)
+    academic_years = student_academic_years(grades_df, session["student_id"], current_year)
+    selected_year = request.args.get("academic_year", current_year).strip()
+    if selected_year not in academic_years:
+        selected_year = current_year
+    report_class = class_label_for_year(
+        grades_df, session["student_id"], selected_year,
+        str(student_info.get("ClassLabel", "")),
+    )
+    student_info = dict(student_info)
+    student_info["ClassLabel"] = report_class
+    valid_terms = valid_terms_for_class(report_class)
     # Build per-term data (None = not yet released)
-    all_terms = get_all_terms(grades_df, session["student_id"], valid_terms)
+    all_terms = get_all_terms(grades_df, session["student_id"], valid_terms, selected_year)
 
     # ── Approval gate ──────────────────────────────────────────────────────────
     # Even if scores exist in Grades, parents only see them once the
@@ -795,7 +963,7 @@ def report():
     approval_df    = load_approval()
     student_id_key = session["student_id"]
     all_terms = {
-        t: (data if (data is not None and is_approved(approval_df, student_id_key, t)) else None)
+        t: (data if (data is not None and is_approved(approval_df, student_id_key, t, selected_year)) else None)
         for t, data in all_terms.items()
     }
     # ──────────────────────────────────────────────────────────────────────────
@@ -822,6 +990,9 @@ def report():
         threshold    = PASS_THRESHOLD,
         valid_terms  = valid_terms,
         default_term = get_latest_released_term(all_terms, valid_terms),
+        academic_years = academic_years,
+        selected_academic_year = selected_year,
+        current_academic_year = current_year,
         report_generated = report_generated_date(EXCEL_PATH),
         student_photo_url = get_student_photo_url(student_info.get("StudentID", "")),
     )
@@ -926,18 +1097,42 @@ def hod_review():
             if not student_ids:
                 flash("No students selected for batch approval.", "warning")
                 return redirect_back
-            for sid in student_ids:
-                approval_df = _upsert_approval(approval_df, sid, term, True, "")
             try:
-                save_approval(approval_df)
+                students_df, grades_df = load_sheets()
+            except (FileNotFoundError, OSError) as exc:
+                flash(str(exc), "error")
+                return redirect_back
+            approved_count = 0
+            promoted_students = []
+            for sid in student_ids:
+                student = get_student_info(students_df, sid)
+                if student is None or str(student.get("ClassLabel", "")).strip() != class_label:
+                    continue
+                academic_year = str(student.get("AcademicYear") or CURRENT_ACADEMIC_YEAR)
+                approval_df = _upsert_approval(
+                    approval_df, sid, term, True, "", academic_year
+                )
+                approved_count += 1
+                promoted = promote_student_after_final_term(
+                    students_df, grades_df, sid, term
+                )
+                if promoted:
+                    promoted_students.append((sid, *promoted))
+            if not approved_count:
+                flash("No selected students remain in this class.", "warning")
+                return redirect_back
+            try:
+                save_sheets(students_df, grades_df, approval_df)
             except OSError as exc:
                 flash(str(exc), "error")
                 return redirect_back
-            flash(
-                f"✔ Approved {len(student_ids)} student(s) for "
-                f"{class_label} — Term {term}. Scores are now visible to parents.",
-                "success",
+            message = (
+                f"Approved {approved_count} student(s) for {class_label} — Term {term}. "
+                "Scores are now visible to parents."
             )
+            if promoted_students:
+                message += f" Promoted {len(promoted_students)} student(s) to the next level and academic year."
+            flash(message, "success")
             return redirect_back
 
         # ── Single-student action ──────────────────────────────────────────────
@@ -945,6 +1140,17 @@ def hod_review():
         if not student_id:
             flash("Missing student ID.", "error")
             return redirect_back
+
+        try:
+            students_df, grades_df = load_sheets()
+        except (FileNotFoundError, OSError) as exc:
+            flash(str(exc), "error")
+            return redirect_back
+        student = get_student_info(students_df, student_id)
+        if student is None or str(student.get("ClassLabel", "")).strip() != class_label:
+            flash("Student is no longer in this class. Refresh the review list.", "warning")
+            return redirect_back
+        academic_year = str(student.get("AcademicYear") or CURRENT_ACADEMIC_YEAR)
 
         if action == "approve":
             new_approved, new_note = True, ""
@@ -962,13 +1168,22 @@ def hod_review():
             flash("Unknown action.", "error")
             return redirect_back
 
-        approval_df = _upsert_approval(approval_df, student_id, term, new_approved, new_note)
+        approval_df = _upsert_approval(
+            approval_df, student_id, term, new_approved, new_note, academic_year
+        )
+        promoted = None
+        if action == "approve":
+            promoted = promote_student_after_final_term(
+                students_df, grades_df, student_id, term
+            )
         try:
-            save_approval(approval_df)
+            save_sheets(students_df, grades_df, approval_df)
         except OSError as exc:
             flash(str(exc), "error")
             return redirect_back
 
+        if promoted:
+            msg += f" Promoted to {promoted[0]} for {promoted[1]}."
         flash(msg, msg_type)
         return redirect_back
 
@@ -992,13 +1207,15 @@ def hod_review():
     if sel_class:
         for s in get_students_by_class(students_df, sel_class):
             sid          = str(s.get("StudentID", "")).strip()
-            grade_row    = get_student_term(grades_df, sid, sel_term) if sid else None
-            approval_row = get_approval_row(approval_df, sid, sel_term) if sid else None
+            academic_year = str(s.get("AcademicYear") or CURRENT_ACADEMIC_YEAR)
+            grade_row    = get_student_term(grades_df, sid, sel_term, academic_year) if sid else None
+            approval_row = get_approval_row(approval_df, sid, sel_term, academic_year) if sid else None
             student_rows.append({
                 "student_id": sid,
                 "name":       s.get("Name", ""),
+                "academic_year": academic_year,
                 "grades":     grade_row,
-                "status":     term_review_status(approval_df, sid, sel_term) if sid else "pending",
+                "status":     term_review_status(approval_df, sid, sel_term, academic_year) if sid else "pending",
                 "note":       approval_row["RequestNote"] if approval_row else "",
             })
 
@@ -1047,8 +1264,9 @@ def hod_student_preview(student_id):
         return redirect(url_for("hod_review"))
 
     # No approval gate — show all available term data
+    academic_year = str(student_info.get("AcademicYear") or CURRENT_ACADEMIC_YEAR)
     valid_terms = valid_terms_for_class(student_info.get("ClassLabel", ""))
-    all_terms = get_all_terms(grades_df, student_id, valid_terms)
+    all_terms = get_all_terms(grades_df, student_id, valid_terms, academic_year)
 
     completed = [t for t in all_terms.values() if t is not None]
     if completed:
@@ -1135,12 +1353,13 @@ def _class_term_rows(dept, students_df, grades_df, class_label, term, score_cols
     rows = []
     for s in get_students_by_class(students_df, class_label):
         sid = str(s.get("StudentID", "")).strip()
+        academic_year = str(s.get("AcademicYear") or CURRENT_ACADEMIC_YEAR).strip()
         grade_row = None
         if sid:
             if dept == "cn":
                 grade_row = cn_get_term(grades_df, sid, term)
             else:
-                grade_row = get_student_term(grades_df, sid, term)
+                grade_row = get_student_term(grades_df, sid, term, academic_year)
         if grade_row is not None:
             scores = {col: grade_row.get(col, "") for col in score_cols}
             final  = grade_row.get("FinalReport", grade_row.get("TotalGrade", ""))
@@ -1150,6 +1369,7 @@ def _class_term_rows(dept, students_df, grades_df, class_label, term, score_cols
         rows.append({
             "student_id": sid,
             "name":       s.get("Name", ""),
+            "academic_year": academic_year,
             "scores":     scores,
             "final":      final,
             "is_new":     grade_row is None,
@@ -1187,13 +1407,15 @@ def update():
                 if not sid:
                     continue
                 for t in valid_terms_for_class(cl, dept):
-                    if term_review_status(approval_df, sid, t) == "changes_requested":
-                        row = get_approval_row(approval_df, sid, t)
+                    academic_year = str(s.get("AcademicYear") or CURRENT_ACADEMIC_YEAR)
+                    if term_review_status(approval_df, sid, t, academic_year) == "changes_requested":
+                        row = get_approval_row(approval_df, sid, t, academic_year)
                         changes_requested.append({
                             "student_id":   sid,
                             "student_name": s.get("Name", ""),
                             "class_label":  cl,
                             "term":         t,
+                            "academic_year": academic_year,
                             "note":         row["RequestNote"] if row else "",
                         })
 
@@ -1322,19 +1544,29 @@ def update_save_class():
             flash(str(exc), "error")
             return redirect(url_for("update", class_label=class_label, term=term))
     else:
+        student_years = dict(zip(
+            students_df["StudentID"].astype(str).str.strip(),
+            students_df["AcademicYear"].astype(str).str.strip(),
+        ))
         for sid, scores in to_save:
+            academic_year = student_years.get(sid, CURRENT_ACADEMIC_YEAR)
             mask = (
                 (grades_df["StudentID"].astype(str).str.strip() == sid) &
-                (grades_df["Term"].astype(int) == term)
+                (grades_df["Term"].astype(int) == term) &
+                (grades_df["AcademicYear"].astype(str).str.strip() == academic_year)
             )
             idx = grades_df.index[mask]
             if not idx.empty:
                 row_idx = idx[0]
                 for col, val in scores.items():
                     grades_df.at[row_idx, col] = val
+                grades_df.at[row_idx, "ClassLabel"] = class_label
                 grades_df.at[row_idx, "FinalReport"] = calc_final(grades_df.loc[row_idx])
             else:
-                new_row = {"StudentID": sid, "Term": term, **scores, "FinalReport": 0.0}
+                new_row = {
+                    "StudentID": sid, "Term": term, "AcademicYear": academic_year,
+                    "ClassLabel": class_label, **scores, "FinalReport": 0.0,
+                }
                 temp = pd.Series(new_row)
                 new_row["FinalReport"] = calc_final(temp)
                 grades_df = pd.concat(
@@ -1559,6 +1791,8 @@ def admin_student_add():
         "ClassLabel":     class_label,
         "ParentPassword": password,
     }])
+    if dept == "en":
+        new_row["AcademicYear"] = academic_year_for_class(students_df, class_label)
     students_df = pd.concat([students_df, new_row], ignore_index=True)
 
     try:
@@ -1748,8 +1982,9 @@ def admin_student_preview(student_id):
         return redirect(url_for("approve_scores"))
 
     # No approval gate — show all available term data
+    academic_year = str(student_info.get("AcademicYear") or CURRENT_ACADEMIC_YEAR)
     valid_terms = valid_terms_for_class(student_info.get("ClassLabel", ""))
-    all_terms = get_all_terms(grades_df, student_id, valid_terms)
+    all_terms = get_all_terms(grades_df, student_id, valid_terms, academic_year)
 
     completed = [t for t in all_terms.values() if t is not None]
     if completed:

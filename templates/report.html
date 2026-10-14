@@ -90,6 +90,20 @@
 
   <hr class="report-divider" />
 
+  {% if academic_years | default([]) | length > 1 %}
+  <form method="GET" action="{{ url_for('report') }}" class="term-view-selector">
+    <label class="term-view-label" for="academic-year-selector">{{ _('Academic Year') }}</label>
+    <select id="academic-year-selector" class="term-view-select" name="academic_year"
+            onchange="this.form.submit()">
+      {% for year in academic_years %}
+      <option value="{{ year }}" {% if year == selected_academic_year %}selected{% endif %}>
+        {{ year }}{% if year == current_academic_year %} ({{ _('Current') }}){% endif %}
+      </option>
+      {% endfor %}
+    </select>
+  </form>
+  {% endif %}
+
   <!-- ── Term View Selector ─────────────────────────────────────── -->
   <div class="term-view-selector">
     <label class="term-view-label" for="term-selector">{{ _('View Term') }}</label>

@@ -77,6 +77,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
 
         # ── Report card — term selector ───────────────────────────────────────
         "View Term":                     "View Term",
+        "Academic Year":                 "Academic Year",
+        "Current":                       "Current",
         "Master Overview (All Terms)":   "Master Overview (All Terms)",
         "Term %(n)s":                    "Term %(n)s",
         "Term %(n)s Report":             "Term %(n)s Report",
@@ -192,11 +194,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Wrong department?":             "ខុសថ្នាក់សិក្សាមែនទែ?",
 
         # ── Report card — school header ───────────────────────────────────────
-        "Official Term Report Card":     "ប្រតិបត្តពិន្ទុ",
+        "Official Term Report Card":     "ប្រតិបត្តិពិន្ទុ",
         "Academic Year 2024 \u2013 2025":
             "ឆ្នាំសិក្សា ២០២៤ \u2013 ២០២៥",
         "Chinese Department \u2013 Official Term Report Card":
-            "ថ្នាក់សិក្សាភាសាចិន \u2013 ប្រតិបត្តពិន្ទុ",
+            "ថ្នាក់សិក្សាភាសាចិន \u2013 ប្រតិបត្តិពិន្ទុ",
         "CN Program \u2022 Academic Year 2024 \u2013 2025":
             "កម្មវិធី CN \u2022 ឆ្នាំសិក្សា ២០២៤ \u2013 ២០២៥",
 
@@ -211,6 +213,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
 
         # ── Report card — term selector ───────────────────────────────────────
         "View Term":                     "ជ្រេីសរើសវគ្គសិក្សា",
+        "Academic Year":                 "ឆ្នាំសិក្សា",
+        "Current":                       "បច្ចុប្បន្ន",
         "Master Overview (All Terms)":   "ទិដ្ឋភាពសរុប (គ្រប់ក្រតា)",
         "Term %(n)s":                    "វគ្គទី %(n)s",
         "Term %(n)s Report":             "របាយការណ៍វគ្គសិក្សាទី %(n)s",

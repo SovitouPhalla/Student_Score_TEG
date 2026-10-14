@@ -7,9 +7,10 @@ A Flask web application for **Tribal Education Group** that lets parents view st
 ## Features
 
 - **Two departments** — English and Chinese, each with their own student database and scoring rules
-- **Parent login** — Students log in by name + password to view their 4-term report card
+- **Parent login** — Students log in by name + password to view their class-specific report card (L2 Morning has five terms)
 - **Teacher portal** — Department-specific login; teachers enter scores which are held pending approval
 - **HOD approval workflow** — Head of Department reviews and approves/rejects scores before they become visible to parents
+- **Automatic level advancement** — English students advance to the next `L<number>` level after the final term is approved; academic-year reports remain available
 - **Admin dashboard** — Add, edit, and delete student records
 - **i18n support** — English and Khmer (ភាសាខ្មែរ) via Flask-Babel
 - **Print-ready report cards** — Styled for A4 with a print button
@@ -110,11 +111,11 @@ Open `http://127.0.0.1:5000` in a browser.
 
 | Sheet | Columns |
 |---|---|
-| Students | StudentID, Name, ClassLabel, ParentPassword |
-| Grades | StudentID, Term, Conduct, CP, HW_ASS, QUIZ, MidTerm, Final, FinalReport |
+| Students | StudentID, Name, ClassLabel, ParentPassword, AcademicYear |
+| Grades | StudentID, Term, AcademicYear, ClassLabel, Conduct, CP, HW_ASS, QUIZ, MidTerm, Final, FinalReport |
 | Teachers | Username, Password, Role |
 | Admins | Username, Password |
-| ApprovalStatus | StudentID, Term, Approved, RequestNote |
+| ApprovalStatus | StudentID, Term, AcademicYear, Approved, RequestNote |
 
 ### `chinese_grades.xlsx` (Chinese Department)
 
