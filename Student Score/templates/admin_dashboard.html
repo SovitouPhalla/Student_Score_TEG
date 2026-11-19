@@ -13,6 +13,7 @@
         <strong>{{ session['admin_user'] }}</strong></p>
     </div>
     <div class="admin-stats">
+      <a href="{{ url_for('admin_exam_alerts') }}" class="btn btn-outline btn-sm">⏰ Exam dates &amp; alerts</a>
       <div class="stat-chip">
         <span class="stat-num">{{ total }}</span>
         <span class="stat-lbl">Total Students</span>

@@ -2120,3 +2120,26 @@ select:focus {
 @media print {
   .cn-grade-scale { break-inside: avoid; }
 }
+
+/* ── Final-exam score alerts ──────────────────────────────── */
+.exam-alert-container {
+  max-width: 720px;
+  margin: 1rem auto 0;
+  padding: 0 1rem;
+}
+
+.exam-alert {
+  padding: .75rem 1rem;
+  border-radius: var(--radius);
+  margin-bottom: .5rem;
+  font-family: 'Arial', sans-serif;
+  font-size: .9rem;
+  border-left: 4px solid var(--amber);
+  background: #fffbeb;
+  color: #78350f;
+}
+
+.exam-alert-due_today { border-color: #ea580c; background: #fff7ed; color: #7c2d12; }
+.exam-alert-overdue   { border-color: var(--red); background: #fef2f2; color: #7f1d1d; }
+.exam-alert-due       { margin-left: .5rem; font-size: .85rem; }
+.exam-alert ul        { margin: .4rem 0 0 1.2rem; padding: 0; }

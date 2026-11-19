@@ -217,6 +217,13 @@ CN_SCORE_WEIGHTS = {
 }
 CN_PASS_THRESHOLD = 60.0
 CN_VALID_TERMS    = (1, 2, 3, 4)
+CN_STUDENT_COLUMNS = [
+    "StudentID",
+    "Name in Chinese",
+    "Name in English",
+    "ClassLabel",
+    "ParentPassword",
+]
 
 
 def valid_terms_for_class(class_label: str, dept: str = "en") -> tuple:
@@ -2019,13 +2026,14 @@ def admin_student_preview(student_id):
 def init_cn_excel() -> None:
     """
     Create chinese_grades.xlsx with two empty sheets if the file is absent.
-    Students sheet: No | Name | Class | Password
+    Students sheet: StudentID | Name in Chinese | Name in English |
+                    ClassLabel | ParentPassword
     Grades sheet:   No | Term | Behavior | CP | Homework | Quiz | FinalTest |
                     TotalGrade | Status
     """
     if os.path.exists(CN_EXCEL_PATH):
         return
-    students_df = pd.DataFrame(columns=["No", "Name", "Class", "Password"])
+    students_df = pd.DataFrame(columns=CN_STUDENT_COLUMNS)
     grades_df   = pd.DataFrame(columns=[
         "No", "Term", "Behavior", "CP", "Homework",
         "Quiz", "FinalTest", "TotalGrade", "Status",
@@ -2048,8 +2056,32 @@ def load_cn_sheets():
             CN_EXCEL_PATH,
             sheet_name="Students",
             engine="openpyxl",
-            dtype={"No": str, "Name": str, "Class": str, "Password": str},
+            dtype={
+                "StudentID": str,
+                "Name in Chinese": str,
+                "Name in English": str,
+                "ClassLabel": str,
+                "ParentPassword": str,
+                "No": str,
+                "Name": str,
+                "Class": str,
+                "Password": str,
+            },
         )
+        students_df.rename(
+            columns={
+                "StudentID": "No",
+                "Name in English": "Name",
+                "ClassLabel": "Class",
+                "ParentPassword": "Password",
+            },
+            inplace=True,
+        )
+        if "Name in Chinese" not in students_df:
+            students_df["Name in Chinese"] = ""
+        for required_column in ("No", "Name", "Class", "Password"):
+            if required_column not in students_df:
+                students_df[required_column] = ""
         grades_df = pd.read_excel(
             CN_EXCEL_PATH,
             sheet_name="Grades",
@@ -2092,9 +2124,13 @@ def cn_letter_grade(score: float) -> tuple:
 
 
 def cn_get_students_by_name(students_df: pd.DataFrame, name: str) -> list:
-    """Case-insensitive name search across Chinese students."""
+    """Case-insensitive search across English and Chinese student names."""
     sanitized = name.strip().lower()
-    mask = students_df["Name"].astype(str).str.strip().str.lower() == sanitized
+    english_names = students_df["Name"].astype(str).str.strip().str.lower()
+    chinese_names = (
+        students_df["Name in Chinese"].astype(str).str.strip().str.lower()
+    )
+    mask = (english_names == sanitized) | (chinese_names == sanitized)
     return students_df[mask].to_dict(orient="records")
 
 
@@ -2111,8 +2147,12 @@ def cn_get_student_by_name_and_class(students_df: pd.DataFrame,
                                      name: str, class_label: str):
     """Disambiguate by name + class for the Chinese department."""
     sanitized = name.strip().lower()
+    english_names = students_df["Name"].astype(str).str.strip().str.lower()
+    chinese_names = (
+        students_df["Name in Chinese"].astype(str).str.strip().str.lower()
+    )
     mask = (
-        (students_df["Name"].astype(str).str.strip().str.lower() == sanitized) &
+        ((english_names == sanitized) | (chinese_names == sanitized)) &
         (students_df["Class"].astype(str).str.strip() == class_label.strip())
     )
     match = students_df[mask]
@@ -2147,9 +2187,16 @@ def save_cn_sheets(students_df: pd.DataFrame, grades_df: pd.DataFrame) -> None:
     Preserves the Teachers sheet if it exists.
     """
     teachers_df = load_cn_teachers()
+    students_to_save = pd.DataFrame({
+        "StudentID": students_df["No"].fillna("").astype(str),
+        "Name in Chinese": students_df["Name in Chinese"].fillna("").astype(str),
+        "Name in English": students_df["Name"].fillna("").astype(str),
+        "ClassLabel": students_df["Class"].fillna("").astype(str),
+        "ParentPassword": students_df["Password"].fillna("").astype(str),
+    })
     try:
         with pd.ExcelWriter(CN_EXCEL_PATH, engine="openpyxl") as writer:
-            students_df.to_excel(writer, sheet_name="Students", index=False)
+            students_to_save.to_excel(writer, sheet_name="Students", index=False)
             grades_df.to_excel(writer,   sheet_name="Grades",   index=False)
             if not teachers_df.empty:
                 teachers_df.to_excel(writer, sheet_name="Teachers", index=False)

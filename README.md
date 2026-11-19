@@ -121,7 +121,7 @@ Open `http://127.0.0.1:5000` in a browser.
 
 | Sheet | Columns |
 |---|---|
-| Students | No, Name, Class, Password |
+| Students | StudentID, Name in Chinese, Name in English, ClassLabel, ParentPassword |
 | Grades | No, Term, Behavior, CP, Homework, Quiz, FinalTest, TotalGrade, Status |
 | Teachers | Username, Password, Role |
 
@@ -170,6 +170,24 @@ Passing threshold: **60%**
 | `/hod/review` | HOD approval dashboard |
 | `/admin/login` | Admin login |
 | `/admin/dashboard` | Admin student management |
+| `/admin/exam-alerts` | Admin: final exam dates and Telegram reminders |
+
+---
+
+## Final-Exam Score Alerts
+
+Teachers are reminded to enter Final scores within 7 days after each final exam. Exam dates change every term, so an admin records them at **Admin → Exam dates & alerts** (`/admin/exam-alerts`) — one date per department and term.
+
+- **In-app:** from the day after the exam until every student in a class has a Final score, teachers (their department) and admins (all) see a banner listing each class and how many students are missing. It turns red once overdue and disappears on its own when scores are complete.
+- **Telegram:** one message to a shared teachers' group. Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` (and optionally `PORTAL_URL`), add the bot to the group, then schedule this once a day (e.g. 08:00):
+
+  ```
+  flask --app app send-exam-reminders
+  ```
+
+  Each stage is announced once (window opens, 2 days left, due today) and then daily while overdue for up to 7 days. Use `--dry-run` to preview the message. Admins can also resend the current list from the exam-dates page.
+
+Dates and sent-reminder history live in `exam_alerts.json` (git-ignored).
 
 ---
 

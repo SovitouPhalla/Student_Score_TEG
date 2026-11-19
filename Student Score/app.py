@@ -31,9 +31,13 @@ POST /update/save       → teacher: validate, calculate, upsert row
 
 import os
 import re
+from datetime import date, timedelta
+
+import click
 import pandas as pd
 from flask import (
     Flask,
+    g,
     render_template,
     request,
     redirect,
@@ -42,6 +46,8 @@ from flask import (
     flash,
 )
 from flask_babel import Babel, gettext as _
+
+import exam_alerts
 
 # ── App setup ──────────────────────────────────────────────────────────────────
 app = Flask(__name__)
@@ -100,6 +106,13 @@ CN_SCORE_WEIGHTS = {
 }
 CN_PASS_THRESHOLD = 60.0
 CN_VALID_TERMS    = (1, 2, 3, 4)
+CN_STUDENT_COLUMNS = [
+    "StudentID",
+    "Name in Chinese",
+    "Name in English",
+    "ClassLabel",
+    "ParentPassword",
+]
 
 
 def parse_level_number(level_value):
@@ -1797,13 +1810,14 @@ def admin_student_preview(student_id):
 def init_cn_excel() -> None:
     """
     Create chinese_grades.xlsx with two empty sheets if the file is absent.
-    Students sheet: No | Name | Class | Password
+    Students sheet: StudentID | Name in Chinese | Name in English |
+                    ClassLabel | ParentPassword
     Grades sheet:   No | Term | Behavior | CP | Homework | Quiz | FinalTest |
                     TotalGrade | Status
     """
     if os.path.exists(CN_EXCEL_PATH):
         return
-    students_df = pd.DataFrame(columns=["No", "Name", "Class", "Password"])
+    students_df = pd.DataFrame(columns=CN_STUDENT_COLUMNS)
     grades_df   = pd.DataFrame(columns=[
         "No", "Term", "Behavior", "CP", "Homework",
         "Quiz", "FinalTest", "TotalGrade", "Status",
@@ -1826,8 +1840,32 @@ def load_cn_sheets():
             CN_EXCEL_PATH,
             sheet_name="Students",
             engine="openpyxl",
-            dtype={"No": str, "Name": str, "Class": str, "Password": str},
+            dtype={
+                "StudentID": str,
+                "Name in Chinese": str,
+                "Name in English": str,
+                "ClassLabel": str,
+                "ParentPassword": str,
+                "No": str,
+                "Name": str,
+                "Class": str,
+                "Password": str,
+            },
         )
+        students_df.rename(
+            columns={
+                "StudentID": "No",
+                "Name in English": "Name",
+                "ClassLabel": "Class",
+                "ParentPassword": "Password",
+            },
+            inplace=True,
+        )
+        if "Name in Chinese" not in students_df:
+            students_df["Name in Chinese"] = ""
+        for required_column in ("No", "Name", "Class", "Password"):
+            if required_column not in students_df:
+                students_df[required_column] = ""
         grades_df = pd.read_excel(
             CN_EXCEL_PATH,
             sheet_name="Grades",
@@ -1870,9 +1908,13 @@ def cn_letter_grade(score: float) -> tuple:
 
 
 def cn_get_students_by_name(students_df: pd.DataFrame, name: str) -> list:
-    """Case-insensitive name search across Chinese students."""
+    """Case-insensitive search across English and Chinese student names."""
     sanitized = name.strip().lower()
-    mask = students_df["Name"].astype(str).str.strip().str.lower() == sanitized
+    english_names = students_df["Name"].astype(str).str.strip().str.lower()
+    chinese_names = (
+        students_df["Name in Chinese"].astype(str).str.strip().str.lower()
+    )
+    mask = (english_names == sanitized) | (chinese_names == sanitized)
     return students_df[mask].to_dict(orient="records")
 
 
@@ -1889,8 +1931,12 @@ def cn_get_student_by_name_and_class(students_df: pd.DataFrame,
                                      name: str, class_label: str):
     """Disambiguate by name + class for the Chinese department."""
     sanitized = name.strip().lower()
+    english_names = students_df["Name"].astype(str).str.strip().str.lower()
+    chinese_names = (
+        students_df["Name in Chinese"].astype(str).str.strip().str.lower()
+    )
     mask = (
-        (students_df["Name"].astype(str).str.strip().str.lower() == sanitized) &
+        ((english_names == sanitized) | (chinese_names == sanitized)) &
         (students_df["Class"].astype(str).str.strip() == class_label.strip())
     )
     match = students_df[mask]
@@ -1925,9 +1971,16 @@ def save_cn_sheets(students_df: pd.DataFrame, grades_df: pd.DataFrame) -> None:
     Preserves the Teachers sheet if it exists.
     """
     teachers_df = load_cn_teachers()
+    students_to_save = pd.DataFrame({
+        "StudentID": students_df["No"].fillna("").astype(str),
+        "Name in Chinese": students_df["Name in Chinese"].fillna("").astype(str),
+        "Name in English": students_df["Name"].fillna("").astype(str),
+        "ClassLabel": students_df["Class"].fillna("").astype(str),
+        "ParentPassword": students_df["Password"].fillna("").astype(str),
+    })
     try:
         with pd.ExcelWriter(CN_EXCEL_PATH, engine="openpyxl") as writer:
-            students_df.to_excel(writer, sheet_name="Students", index=False)
+            students_to_save.to_excel(writer, sheet_name="Students", index=False)
             grades_df.to_excel(writer,   sheet_name="Grades",   index=False)
             if not teachers_df.empty:
                 teachers_df.to_excel(writer, sheet_name="Teachers", index=False)
@@ -2059,6 +2112,166 @@ def cn_logout():
     session.pop("department",    None)
     flash("You have been logged out.", "info")
     return redirect(url_for("cn_login"))
+
+
+# ── Final-exam score-entry alerts ──────────────────────────────────────────────
+
+def _final_score_data(dept: str):
+    """
+    Return (students, scored) for exam_alerts.compute_alerts, or None if the
+    department's workbook is missing.
+      students: [{"id", "class", "terms"}]   scored: {(student_id, term)}
+    """
+    if dept == "cn":
+        if not os.path.exists(CN_EXCEL_PATH):
+            return None
+        students_raw, grades_df = load_cn_sheets()
+        students_df = students_raw.rename(columns={"No": "StudentID", "Class": "ClassLabel"})
+        final_col = "FinalTest"
+    else:
+        students_df, grades_df = load_sheets()
+        final_col = "Final"
+
+    students = []
+    for row in students_df.to_dict(orient="records"):
+        sid, cls = row.get("StudentID"), row.get("ClassLabel")
+        if pd.isna(sid) or pd.isna(cls) or not str(sid).strip() or not str(cls).strip():
+            continue
+        terms = CN_VALID_TERMS if dept == "cn" else get_student_valid_terms(row)
+        students.append({"id": str(sid).strip(), "class": str(cls).strip(), "terms": terms})
+
+    id_col = "No" if dept == "cn" else "StudentID"
+    graded = grades_df.dropna(subset=[id_col, "Term", final_col])
+    scored = {(str(sid).strip(), int(term)) for sid, term in zip(graded[id_col], graded["Term"])}
+    return students, scored
+
+
+def get_exam_alerts(depts) -> list:
+    """Current alerts for the given departments. Never raises: alerts must not break a page."""
+    state = exam_alerts.load_state()
+    if not state["exams"]:
+        return []
+    today = exam_alerts.today_local()
+    alerts = []
+    for dept in depts:
+        try:
+            data = _final_score_data(dept)
+        except (FileNotFoundError, OSError, KeyError, ValueError):
+            continue
+        if data:
+            alerts += exam_alerts.compute_alerts(dept, *data, today=today, state=state)
+    return sorted(alerts, key=lambda a: (exam_alerts.STAGE_ORDER[a["stage"]],
+                                         a["dept"], a["term"], a["class"]))
+
+
+@app.context_processor
+def inject_exam_alerts():
+    """Expose `exam_alerts` to templates for logged-in teachers (their dept) and admins (all)."""
+    if session.get("role") == "admin":
+        depts = ("en", "cn")
+    elif session.get("teacher_user"):
+        depts = (session.get("teacher_dept", "en"),)
+    else:
+        return {}
+    if "exam_alerts" not in g:
+        g.exam_alerts = get_exam_alerts(depts)
+    return {"exam_alerts": g.exam_alerts, "dept_names": exam_alerts.DEPT_NAMES}
+
+
+def _exam_alerts_page():
+    return redirect(url_for("admin_exam_alerts"))
+
+
+@app.route("/admin/exam-alerts", methods=["GET"])
+def admin_exam_alerts():
+    guard = _admin_required()
+    if guard:
+        return guard
+    return render_template(
+        "exam_alerts.html",
+        exams=exam_alerts.list_exams(),
+        today=exam_alerts.today_local(),
+        grace_days=exam_alerts.SCORE_GRACE_DAYS,
+        telegram_ready=exam_alerts.telegram_configured(),
+        en_terms=EN_VALID_TERMS,
+        cn_terms=CN_VALID_TERMS,
+    )
+
+
+@app.route("/admin/exam-alerts/save", methods=["POST"])
+def admin_exam_alerts_save():
+    guard = _admin_required()
+    if guard:
+        return guard
+    dept = request.form.get("dept", "").strip()
+    allowed = {"en": EN_VALID_TERMS, "cn": CN_VALID_TERMS}.get(dept)
+    try:
+        term = int(request.form.get("term", ""))
+        final_date = date.fromisoformat(request.form.get("final_date", "").strip())
+    except ValueError:
+        flash("Please choose a term and a valid final exam date.", "error")
+        return _exam_alerts_page()
+    if allowed is None or term not in allowed:
+        flash("Invalid department or term.", "error")
+        return _exam_alerts_page()
+    try:
+        exam_alerts.set_final_date(dept, term, final_date)
+    except OSError as exc:
+        flash(f"Could not save the exam date: {exc}", "error")
+        return _exam_alerts_page()
+    due = final_date + timedelta(days=exam_alerts.SCORE_GRACE_DAYS)
+    flash(f"{exam_alerts.DEPT_NAMES[dept]} Term {term}: final exam {final_date:%d %b %Y}, "
+          f"scores due {due:%d %b %Y}.", "success")
+    return _exam_alerts_page()
+
+
+@app.route("/admin/exam-alerts/delete", methods=["POST"])
+def admin_exam_alerts_delete():
+    guard = _admin_required()
+    if guard:
+        return guard
+    dept = request.form.get("dept", "").strip()
+    try:
+        exam_alerts.delete_final_date(dept, int(request.form.get("term", "")))
+        flash("Exam date removed.", "info")
+    except (ValueError, OSError) as exc:
+        flash(f"Could not remove the exam date: {exc}", "error")
+    return _exam_alerts_page()
+
+
+@app.route("/admin/exam-alerts/send", methods=["POST"])
+def admin_exam_alerts_send():
+    """Manually post the current alerts to the Telegram group (ignores the sent history)."""
+    guard = _admin_required()
+    if guard:
+        return guard
+    alerts = get_exam_alerts(("en", "cn"))
+    if not alerts:
+        flash("Nothing to send: no class has Final scores outstanding.", "info")
+        return _exam_alerts_page()
+    result = exam_alerts.send_pending_reminders(alerts, force=True)
+    if result["sent"]:
+        flash(f"Reminder sent to the Telegram group ({result['count']} alert(s)).", "success")
+    else:
+        flash(f"Telegram reminder failed: {result['error']}", "error")
+    return _exam_alerts_page()
+
+
+@app.cli.command("send-exam-reminders")
+@click.option("--dry-run", is_flag=True, help="Print the message instead of sending it.")
+def send_exam_reminders_command(dry_run):
+    """Post new Final-score reminders to the Telegram group. Schedule this daily."""
+    alerts = get_exam_alerts(("en", "cn"))
+    result = exam_alerts.send_pending_reminders(alerts, dry_run=dry_run)
+    if not result["count"]:
+        click.echo("No new reminders to send.")
+    elif dry_run:
+        click.echo(result["message"])
+    elif result["sent"]:
+        click.echo(f"Sent reminder covering {result['count']} alert(s).")
+    else:
+        click.echo(f"Failed: {result['error']}", err=True)
+        raise SystemExit(1)
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────
