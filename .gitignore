@@ -10,4 +10,3 @@ __pycache__/
 .env
 venv/
 teg-env/
-exam_alerts.json

@@ -11,7 +11,7 @@ SCHEMA OVERVIEW
     StudentID | Name | ClassLabel | ParentPassword
 
     CRITICAL: Parents log in using Student Full Name + ParentPassword
-    (not StudentID). See PARENT_LOGIN_REFACTORING.md for details.
+    (not StudentID).
 
 • Grades sheet:
     StudentID | Term | Conduct | CP | HW_ASS | QUIZ | MidTerm | Final | FinalReport
