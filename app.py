@@ -2045,16 +2045,22 @@ def init_cn_excel() -> None:
 
 def load_cn_sheets():
     """
-    Load Chinese Students and Grades sheets from chinese_grades.xlsx.
-    Auto-creates the file if missing.
+    Load Chinese student and grade data from chinese_grades.xlsx.
+    Supports both the current Students/Grades layout and the legacy Sheet1
+    roster whose class is stored in the Level column.
     Returns (students_df, grades_df).
     """
     if not os.path.exists(CN_EXCEL_PATH):
         init_cn_excel()
     try:
+        workbook = pd.ExcelFile(CN_EXCEL_PATH, engine="openpyxl")
+        student_sheet = (
+            "Students" if "Students" in workbook.sheet_names
+            else workbook.sheet_names[0]
+        )
         students_df = pd.read_excel(
             CN_EXCEL_PATH,
-            sheet_name="Students",
+            sheet_name=student_sheet,
             engine="openpyxl",
             dtype={
                 "StudentID": str,
@@ -2066,8 +2072,11 @@ def load_cn_sheets():
                 "Name": str,
                 "Class": str,
                 "Password": str,
+                "Level": str,
             },
         )
+        if "StudentID" not in students_df and "No" not in students_df and "ID" in students_df:
+            students_df["StudentID"] = students_df["ID"]
         students_df.rename(
             columns={
                 "StudentID": "No",
@@ -2079,21 +2088,31 @@ def load_cn_sheets():
         )
         if "Name in Chinese" not in students_df:
             students_df["Name in Chinese"] = ""
+        if "Class" not in students_df and "Level" in students_df:
+            students_df["Class"] = students_df["Level"]
         for required_column in ("No", "Name", "Class", "Password"):
             if required_column not in students_df:
                 students_df[required_column] = ""
-        grades_df = pd.read_excel(
-            CN_EXCEL_PATH,
-            sheet_name="Grades",
-            engine="openpyxl",
-            dtype={"No": str, "Status": str},
-        )
+        if "Grades" in workbook.sheet_names:
+            grades_df = pd.read_excel(
+                CN_EXCEL_PATH,
+                sheet_name="Grades",
+                engine="openpyxl",
+                dtype={"No": str, "Status": str},
+            )
+        else:
+            grades_df = pd.DataFrame(columns=[
+                "No", "Term", "Behavior", "CP", "Homework",
+                "Quiz", "FinalTest", "TotalGrade", "Status",
+            ])
         return students_df, grades_df
     except PermissionError:
         raise OSError(
             "chinese_grades.xlsx appears to be open in another program. "
             "Please close it and try again."
         )
+    except (IndexError, ValueError) as exc:
+        raise OSError(f"Cannot read chinese_grades.xlsx: {exc}")
 
 
 def cn_calc_total(scores: dict) -> float:
