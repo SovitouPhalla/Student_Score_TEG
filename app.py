@@ -1325,8 +1325,8 @@ def _render_update(term=None, class_label=None, class_labels=None,
 def _load_for_update(dept="en"):
     """
     Load both sheets and build the class metadata needed by the teacher page.
-    For CN dept, normalises No->StudentID, Class->ClassLabel so the shared
-    template and helpers work without modification.
+    For CN dept, normalises No->StudentID, Class->ClassLabel and uses the
+    Chinese name for all teacher-facing student displays.
     Returns (students_df, grades_df, class_labels)
     or raises FileNotFoundError / OSError.
     """
@@ -1335,6 +1335,11 @@ def _load_for_update(dept="en"):
         students_df = students_raw.rename(
             columns={"No": "StudentID", "Class": "ClassLabel"}
         ).copy()
+        english_names = students_df["Name"].fillna("").astype(str).str.strip()
+        chinese_names = (
+            students_df["Name in Chinese"].fillna("").astype(str).str.strip()
+        )
+        students_df["Name"] = chinese_names.where(chinese_names.ne(""), english_names)
     else:
         students_df, grades_df = load_sheets()
     class_labels = get_class_labels(students_df)
@@ -2143,13 +2148,10 @@ def cn_letter_grade(score: float) -> tuple:
 
 
 def cn_get_students_by_name(students_df: pd.DataFrame, name: str) -> list:
-    """Case-insensitive search across English and Chinese student names."""
+    """Find Chinese-department students by their English parent-facing name."""
     sanitized = name.strip().lower()
     english_names = students_df["Name"].astype(str).str.strip().str.lower()
-    chinese_names = (
-        students_df["Name in Chinese"].astype(str).str.strip().str.lower()
-    )
-    mask = (english_names == sanitized) | (chinese_names == sanitized)
+    mask = english_names == sanitized
     return students_df[mask].to_dict(orient="records")
 
 
@@ -2164,14 +2166,11 @@ def cn_get_student_by_no(students_df: pd.DataFrame, no: str):
 
 def cn_get_student_by_name_and_class(students_df: pd.DataFrame,
                                      name: str, class_label: str):
-    """Disambiguate by name + class for the Chinese department."""
+    """Disambiguate by parent-facing English name and class."""
     sanitized = name.strip().lower()
     english_names = students_df["Name"].astype(str).str.strip().str.lower()
-    chinese_names = (
-        students_df["Name in Chinese"].astype(str).str.strip().str.lower()
-    )
     mask = (
-        ((english_names == sanitized) | (chinese_names == sanitized)) &
+        (english_names == sanitized) &
         (students_df["Class"].astype(str).str.strip() == class_label.strip())
     )
     match = students_df[mask]
